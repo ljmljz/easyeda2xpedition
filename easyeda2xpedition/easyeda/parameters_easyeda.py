@@ -5,7 +5,7 @@ from typing import List, Union
 
 from pydantic import BaseModel, field_validator
 
-from easyeda2kicad.easyeda.svg_path_parser import parse_svg_path
+from easyeda.svg_path_parser import parse_svg_path
 
 
 class EasyedaPinType(Enum):
@@ -545,6 +545,15 @@ class EeFootprintSolidRegion(BaseModel):
     @classmethod
     def empty_str_lock(cls, field):
         return False if field == "" else field
+    
+
+class EeFootprintLayer(BaseModel):
+    layer_id: int
+    layer_name: str
+    layer_coler: str
+    is_visible: bool
+    is_active: bool
+    is_config: bool
 
 # ---------------- FOOTPRINT ----------------
 
@@ -554,6 +563,7 @@ class EeFootprintInfo:
     name: str
     fp_type: str
     model_3d_name: str
+    layers: List[EeFootprintLayer] = field(default_factory=list)
 
 
 # ------------------------- 3D MODEL -------------------------

@@ -1,7 +1,11 @@
 # EasyEDA2Xpedition
 
+This project is inspired by EasyEDA2KiCAD.py: https://github.com/uPesy/easyeda2kicad.py 
+
 ## EasyEDA File Format
 https://docs.easyeda.com/en/DocumentFormat/3-EasyEDA-PCB-File-Format/
 
-## Xpedition File Format
-TBD
+## Xpedition File Format(.hkp)
+Only focus on the ascii format file.
+
+TBD.

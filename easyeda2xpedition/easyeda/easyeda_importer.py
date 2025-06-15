@@ -2,8 +2,8 @@
 import json
 import logging
 
-from easyeda2kicad.easyeda.easyeda_api import EasyedaApi
-from easyeda2kicad.easyeda.parameters_easyeda import *
+from easyeda.easyeda_api import EasyedaApi
+from easyeda.parameters_easyeda import *
 
 
 def add_easyeda_pin(pin_data: str, ee_symbol: EeSymbol):
@@ -159,11 +159,26 @@ class EasyedaFootprintImporter:
     def extract_easyeda_data(
         self, ee_data_str: dict, ee_data_info: dict, is_smd: bool
     ) -> ee_footprint:
+        ee_layers = []
+        for line in ee_data_str["layers"]:
+            ee_fields = line.split("~")
+
+            # Check if ee_fields[0] contains a numeric value
+            if not any(char.isdigit() for char in ee_fields[0]):
+                logging.info(f"ee_fields[0] contains a numeric value: {ee_fields[0]}")
+                continue
+
+            ee_layer = EeFootprintLayer(
+                **dict(zip(EeFootprintLayer.__fields__, ee_fields))
+            )
+            ee_layers.append(ee_layer)
+
         new_ee_footprint = ee_footprint(
             info=EeFootprintInfo(
                 name=ee_data_info["package"],
                 fp_type="smd" if is_smd else "tht",
                 model_3d_name=ee_data_info.get("3DModel"),
+                layers= ee_layers
             ),
             bbox=EeFootprintBbox(
                 x=float(ee_data_str["head"]["x"]),
