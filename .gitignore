@@ -1,0 +1,6 @@
+output/
+XpeditionDesigner/
+.venv/
+.vscode/
+.idea/
+*.pyc
