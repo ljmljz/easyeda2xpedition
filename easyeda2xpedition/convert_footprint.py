@@ -1,6 +1,6 @@
-from easyeda2kicad.easyeda import easyeda_importer
-from easyeda2kicad.easyeda import easyeda_api
-from easyeda2kicad.easyeda.parameters_easyeda import EeFootprintPad
+from easyeda import easyeda_importer
+from easyeda import easyeda_api
+from easyeda.parameters_easyeda import EeFootprintPad
 import os
 
 def mm_to_th(mm):
