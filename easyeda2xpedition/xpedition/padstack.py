@@ -18,6 +18,15 @@ class XpeditonPadStack(object):
             "POLYGON": "POLYGON",
         }
 
+    def _format_value(self, value):
+        """Format a value for HKP output."""
+        if isinstance(value, str):
+            return f'"{value}"' if ' ' in value or value == '' else value
+        elif isinstance(value, (int, float)):
+            return str(value)
+        else:
+            raise ValueError(f"Unsupported value type: {type(value)}")
+
     def _build_header(self):
         """Build the header for the Xpedition padstack file."""
         self._xpeidtion_header = (
@@ -89,7 +98,7 @@ class XpeditonPadStack(object):
     def _convert_pad(self, pad_name: str, shape: str, width: int, height: int) -> str:
         """Convert EasyEDA pad to Xpedition pad."""
         pad_string = ""
-        pad_string += f".PAD {pad_name}\n"
+        pad_string += f".PAD {self._format_value(pad_name)}\n"
 
         pad_string += f"..{shape.upper()}\n"
 

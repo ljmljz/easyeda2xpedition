@@ -3,7 +3,7 @@ import logging
 
 import requests
 
-from easyeda2kicad import __version__
+__version__ = "0.1.0"
 
 API_ENDPOINT = "https://easyeda.com/api/products/{lcsc_id}/components?version=6.4.19.5"
 ENDPOINT_3D_MODEL = "https://modules.easyeda.com/3dmodel/{uuid}"
@@ -19,7 +19,7 @@ class EasyedaApi:
             "Accept-Encoding": "gzip, deflate",
             "Accept": "application/json, text/javascript, */*; q=0.01",
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "User-Agent": f"easyeda2kicad v{__version__}",
+            "User-Agent": f"easyeda2xpedition v{__version__}",
         }
 
     def get_info_from_easyeda_api(self, lcsc_id: str) -> dict:
