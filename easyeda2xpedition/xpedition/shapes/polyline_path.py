@@ -4,7 +4,7 @@ class PolylinePath(BaseShape):
     """
     Represents a polyline path with multiple points.
     """
-    def __init__(self, points, width, level=3):
+    def __init__(self, points, width=0, level=3):
         super().__init__(level)
         self.shape = "POLYLINE_PATH"
         self.points = points  # List of tuples (x, y)

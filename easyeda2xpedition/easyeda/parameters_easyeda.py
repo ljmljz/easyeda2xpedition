@@ -318,10 +318,14 @@ class EeFootprintBbox:
 
     x: float
     y: float
+    width: float
+    height: float
 
     def convert_to_mm(self) -> None:
         self.x = convert_to_mm(self.x)
         self.y = convert_to_mm(self.y)
+        self.width = convert_to_mm(self.width)
+        self.height = convert_to_mm(self.height)
 
 
 class EeFootprintPad(BaseModel):

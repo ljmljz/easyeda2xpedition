@@ -16,11 +16,11 @@ class PolyarcPath(BaseShape):
         
         if len(self.points) > 0:
             point = self.points[0]
-            shape_string += f"{self.indent(self._level + 1)}XY ({point[0]}, {point[1]})\n"
+            shape_string += f"{self.indent(self._level + 1)}XYR ({point[0]}, {point[1]}, {point[2]})\n"
 
         if len(self.points) > 1:
             for point in self.points[1:]:
                 indent = "\t" * (self._level)
-                shape_string += f"{indent}({point[0]}, {point[1]})\n"
+                shape_string += f"{indent}({point[0]}, {point[1]}, {point[2]})\n"
         
         return shape_string

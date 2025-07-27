@@ -183,6 +183,8 @@ class EasyedaFootprintImporter:
             bbox=EeFootprintBbox(
                 x=float(ee_data_str["head"]["x"]),
                 y=float(ee_data_str["head"]["y"]),
+                width=float(ee_data_str["BBox"]["width"]),
+                height=float(ee_data_str["BBox"]["height"]),
             ),
             model_3d=None,
         )

@@ -5,7 +5,11 @@ from xpedition.pads import *
 from xpedition.padstacks import *
 from xpedition.holes import *
 from xpedition.shapes import *
+from xpedition.shapes.base import BaseShape
 from xpedition.cell import PIN as XpeditionPin
+from xpedition.cell import Cell as XpeditionCell
+from xpedition.cell import SilkscreenOutline, AssemblyOutline, SolderMask, SolderPaste, PlacementOutline
+import re
 
 def ee_unit_to_th(value: float) -> float:
     return value * 10
@@ -22,17 +26,8 @@ class FootprintConverter(object):
         self._pads = {}
         self._padstacks = {}
         self._part = None
-        self._cell = {
-            "PIN": [],
-            "TOP": [],
-            "BOTTOM": [],
-            "SILKSCREEN_OUTLINE": [],
-            "SOLDER_MASK": [],
-            "SOLDER_PASTE": [],
-            "ASSEMBLY_OUTLINE": [],
-            "PLACEMENT_OUTLINE": [],
-            "TEXT": []
-        }
+        self._cell = XpeditionCell(name=self._easyeda_footprint.info.name)
+        self._bbox = self._easyeda_footprint.bbox if hasattr(self._easyeda_footprint, "bbox") else None
 
     def _get_easyeda_layer_name(self,layer_id):
         # 从footprint.info.layers查找layer_id对应的layer_name
@@ -44,16 +39,16 @@ class FootprintConverter(object):
                     return layer.get("layer_name", str(layer_id))
         return str(layer_id)
     
-    def _map_easyeda_layer_to_xpedition(layer_name: str) -> str:
+    def _map_easyeda_layer_to_xpedition(self, layer_name: str) -> str:
         layer_map = {
             "TopLayer": "TOP",
             "BottomLayer": "BOTTOM",
             "TopSilkLayer": "SILKSCREEN_OUTLINE",
             "BottomSilkLayer": "SILKSCREEN_OUTLINE",
-            "TopPasterLayer": "SOLDER_PASTE",
-            "BottomPasterLayer": "SOLDER_PASTE",
-            "TopSolderLayer": "SOLDER_MASK",
-            "BottomSolderLayer": "SOLDER_MASK",
+            "TopPasteMaskLayer": "SOLDER_PASTE",
+            "BottomPasteMaskLayer": "SOLDER_PASTE",
+            "TopSolderMaskLayer": "SOLDER_MASK",
+            "BottomSolderMaskLayer": "SOLDER_MASK",
             "Multi-Layer": "MULTI_LAYER",
             "TopAssembly": "ASSEMBLY_OUTLINE",
             "BottomAssembly": "ASSEMBLY_OUTLINE",
@@ -63,7 +58,7 @@ class FootprintConverter(object):
 
     def convert(self):
         self._convert_easyeda_padstack_to_xpedition()
-        self._save_padstacks_to_file(f"{self._target_folder}/_Pads.hkp")
+        self._convert_easyeda_shape_to_xpedition()
 
         print(f"Converted {len(self._pads)} pads and {len(self._padstacks)} padstacks from EasyEDA to Xpedition format.")
 
@@ -74,10 +69,7 @@ class FootprintConverter(object):
             large_width = width + 8 # 8 mils larger for the solder mask/paste
             height = ee_unit_to_th(pad.height)
             large_height = height + 8
-            pad_name = f"{pad.shape}_{width}x{height}"
-            pad_type = "PIN_THROUGH" if pad.hole_radius > 0 or pad.hole_point else "PIN_SMD"
-            normalized_points = []
-            
+            pad_name = f"{pad.shape}_{width}x{height}"            
 
             xpedition_pad = None
             if pad.shape.upper() == "RECT":
@@ -119,13 +111,13 @@ class FootprintConverter(object):
                         name=f"HOLE_{hole_radius * 2}x{hole_length}",
                         width=hole_radius * 2,
                         height=hole_length,
-                        plated=pad.hole_plated if hasattr(pad, "hole_plated") else True
+                        plated=pad.is_plated if hasattr(pad, "is_plated") else True
                     )
                 else:
                     xpedition_hole = RoundHole(
                         name=f"HOLE_{round(ee_unit_to_th(pad.hole_radius * 2), 4)}",
                         diameter=ee_unit_to_th(pad.hole_radius * 2),
-                        plated=pad.hole_plated if hasattr(pad, "hole_plated") else True
+                        plated=pad.is_plated if hasattr(pad, "is_plated") else True
                     )
 
                 padstack_name = f"{pad_name}_TH"
@@ -134,8 +126,6 @@ class FootprintConverter(object):
                     top_pad=xpedition_pad,
                     bottom_pad=xpedition_pad,
                     internal_pad=xpedition_pad,
-                    top_solderpaste_pad=large_xpedition_pad,
-                    bottom_solderpaste_pad=large_xpedition_pad,
                     top_soldermask_pad=large_xpedition_pad,
                     bottom_soldermask_pad=large_xpedition_pad,
                     hole=xpedition_hole
@@ -149,8 +139,8 @@ class FootprintConverter(object):
                 xpedition_padstack.set_pads(
                     top_pad=xpedition_pad,
                     bottom_pad=xpedition_pad,
-                    top_solderpaste_pad=large_xpedition_pad,
-                    bottom_solderpaste_pad=large_xpedition_pad,
+                    top_solderpaste_pad=xpedition_pad,
+                    bottom_solderpaste_pad=xpedition_pad,
                     top_soldermask_pad=large_xpedition_pad,
                     bottom_soldermask_pad=large_xpedition_pad
                 )
@@ -158,8 +148,11 @@ class FootprintConverter(object):
             if padstack_name not in self._padstacks:
                 self._padstacks[padstack_name] = xpedition_padstack
 
-            pin = XpeditionPin(pad.number, ee_unit_to_th(pad.center_x), ee_unit_to_th(pad.center_y), xpedition_padstack, pad.rotation)
-            self._cell["PIN"].append(pin)
+            # Create a new pin for the pad SMD and TH
+            x = ee_unit_to_th(pad.center_x) - ee_unit_to_th(self._bbox.x)
+            y = ee_unit_to_th(pad.center_y) - ee_unit_to_th(self._bbox.y)
+            pin = XpeditionPin(pad.number, x, y, xpedition_padstack, pad.rotation)
+            self._cell.add_pin(pin)
 
         # Convert EasyEDA holes to Xpedition, the holes are treated as pads with a specific padstack
         for hole in self._easyeda_footprint.holes:
@@ -193,10 +186,132 @@ class FootprintConverter(object):
             else:
                 xpedition_padstack = self._padstacks[padstack_name]
 
-            pin_number = len(self._cell["PIN"]) + 1
-            pin = XpeditionPin(pin_number, ee_unit_to_th(hole.center_x), ee_unit_to_th(hole.center_y), xpedition_padstack, 0)
+            pin_number = self._cell.get_pin_count() + 1
+            x = ee_unit_to_th(hole.center_x) - ee_unit_to_th(self._bbox.x)
+            y = ee_unit_to_th(hole.center_y) - ee_unit_to_th(self._bbox.y)
+            pin = XpeditionPin(pin_number, x, y, xpedition_padstack, 0)
+            self._cell.add_pin(pin)
 
-    def _save_padstacks_to_file(self, filename: str):
+        # Determine mount type based on padstacks
+        if all("SMD" in key for key in self._padstacks.keys()):
+                mount_type = "SURFACE"
+        else:
+            mount_type = "MIXED"
+        self._cell.mount_type = mount_type
+
+    def _add_shape_to_cell(self, shape: BaseShape, layer_name: str):
+        xpedition_layer_name = self._map_easyeda_layer_to_xpedition(layer_name)
+        if "UNKNOWN_LAYER" in xpedition_layer_name:
+            print(f"Warning: Layer '{layer_name}' is not mapped to a known Xpedition layer. Skipping shape.")
+            return
+
+        if xpedition_layer_name == "SILKSCREEN_OUTLINE":
+            silkscreen = SilkscreenOutline(shape, side="MNT_SIDE" if "Top" in layer_name else "OPP_SIDE")
+            self._cell.add_silkscreen_outline(silkscreen)
+        elif xpedition_layer_name == "ASSEMBLY_OUTLINE":
+            assembly = AssemblyOutline(shape)
+            self._cell.add_assembly_outline(assembly)
+        elif xpedition_layer_name == "SOLDER_PASTE":
+            solder_paste = SolderPaste(shape, side="MNT_SIDE" if "Top" in layer_name else "OPP_SIDE")
+            self._cell.add_solder_paste(solder_paste)
+        elif xpedition_layer_name == "SOLDER_MASK":
+            solder_mask = SolderMask(shape, side="MNT_SIDE" if "Top" in layer_name else "OPP_SIDE")
+            self._cell.add_solder_mask(solder_mask)
+
+    def _convert_easyeda_shape_to_xpedition(self):
+        # handle rect in layers to cell
+        for rect in getattr(self._easyeda_footprint, "rectangles", []):
+            layer_name = self._get_easyeda_layer_name(getattr(rect, "layer_id", 0))
+
+            cx = ee_unit_to_th(getattr(rect, "x", 0)) - ee_unit_to_th(self._bbox.x)
+            cy = ee_unit_to_th(getattr(rect, "y", 0)) - ee_unit_to_th(self._bbox.y)
+            width = ee_unit_to_th(getattr(rect, "width", 0))
+            height = ee_unit_to_th(getattr(rect, "height", 0))
+            points = ((cx - width/2, cy + height/2), (cx + width/2, cy + height/2), (cx + width/2, cy - height/2), (cx - width/2, cy - height/2))
+            shape = PolylineShape(points)
+           
+            self._add_shape_to_cell(shape, layer_name)
+
+        # handle circle in layers to cell
+        for circle in getattr(self._easyeda_footprint, "circles", []):
+            layer_name = self._get_easyeda_layer_name(getattr(circle, "layer_id", 0))
+            
+            cx = ee_unit_to_th(getattr(circle, "cx", 0)) - ee_unit_to_th(self._bbox.x)
+            cy = ee_unit_to_th(getattr(circle, "cy", 0)) - ee_unit_to_th(self._bbox.y)
+            radius = ee_unit_to_th(getattr(circle, "radius", 0))
+            width = ee_unit_to_th(getattr(circle, "stroke_width", 0))
+            shape = CirclePath(center_x=cx, center_y=cy, radius=radius, width=width)
+
+            self._add_shape_to_cell(shape, layer_name)
+
+        for arc in getattr(self._easyeda_footprint, "arcs", []):
+            layer_name = self._get_easyeda_layer_name(getattr(arc, "layer_id", 0))
+            
+            points = getattr(arc, "points", [])
+            width = ee_unit_to_th(getattr(arc, "stroke_width", 0))
+
+            # need to convert SVG ARC to PolyarcPath
+            # shape = PolyarcPath(points=points, width=width)
+
+            # self._add_shape_to_cell(shape, layer_name)
+
+        for track in getattr(self._easyeda_footprint, "tracks", []):
+            layer_name = self._get_easyeda_layer_name(getattr(track, "layer_id", 0))
+            
+            point_string = getattr(track, "points", "")
+            points = []
+            if point_string:
+                pts = [float(x) for x in point_string.replace(",", " ").split()]
+                for i in range(0, len(pts), 2):
+                    points.append((ee_unit_to_th(pts[i]) - ee_unit_to_th(self._bbox.x), ee_unit_to_th(pts[i + 1]) - ee_unit_to_th(self._bbox.y)))
+
+            width = ee_unit_to_th(getattr(track, "stroke_width", 0))
+            shape = PolylinePath(points=points, width=width)
+            self._add_shape_to_cell(shape, layer_name)
+
+        for region in getattr(self._easyeda_footprint, "solid_regions", []):
+            layer_name = self._get_easyeda_layer_name(getattr(region, "layer_id", 0))
+            
+            point_string = getattr(region, "points", "")
+            points = []
+            if point_string:
+                # Remove SVG path commands like M, L, Z, etc.
+                cleaned = re.sub(r'[MLHVCSQTAZmlhvcsqtaz]', ' ', point_string)
+                pts = [float(x) for x in cleaned.replace(",", " ").split() if x.strip()]
+                for i in range(0, len(pts), 2):
+                    points.append((ee_unit_to_th(pts[i]) - ee_unit_to_th(self._bbox.x), ee_unit_to_th(pts[i + 1]) - ee_unit_to_th(self._bbox.y)))
+
+            shape = PolylineShape(points=points)
+            self._add_shape_to_cell(shape, layer_name)
+
+        for area in getattr(self._easyeda_footprint, "copper_areas", []):
+            layer_name = self._get_easyeda_layer_name(getattr(area, "layer_id", 0))
+            
+            point_string = getattr(area, "points", "")
+            points = []
+            if point_string:
+                # Remove SVG path commands like M, L, Z, etc.
+                cleaned = re.sub(r'[MLHVCSQTAZmlhvcsqtaz]', ' ', point_string)
+                pts = [float(x) for x in cleaned.replace(",", " ").split() if x.strip()]
+                for i in range(0, len(pts), 2):
+                    points.append((ee_unit_to_th(pts[i]) - ee_unit_to_th(self._bbox.x), ee_unit_to_th(pts[i + 1]) - ee_unit_to_th(self._bbox.y)))
+
+            shape = PolylineShape(points=points)
+            self._add_shape_to_cell(shape, layer_name)
+
+        # add placement outline
+        grow_size = 10  # 10 mils grow size for the placement outline
+        points = [
+            (-ee_unit_to_th(self._easyeda_footprint.bbox.width / 2) - grow_size, -ee_unit_to_th(self._easyeda_footprint.bbox.height / 2) - grow_size),
+            (ee_unit_to_th(self._easyeda_footprint.bbox.width / 2) + grow_size, -ee_unit_to_th(self._easyeda_footprint.bbox.height / 2) - grow_size),
+            (ee_unit_to_th(self._easyeda_footprint.bbox.width / 2) + grow_size, ee_unit_to_th(self._easyeda_footprint.bbox.height / 2) + grow_size),
+            (-ee_unit_to_th(self._easyeda_footprint.bbox.width / 2) - grow_size, ee_unit_to_th(self._easyeda_footprint.bbox.height / 2) + grow_size)
+        ]
+        shape = PolylineShape(points=points, filled=False)
+        outline = PlacementOutline(shape=shape)
+        self._cell.add_placement_outline(outline)
+
+    def save_padstacks_to_file(self, filename: str):
         with open(filename, 'w') as f:
             f.write(".FILETYPE PADSTACK_LIBRARY\n"
                     ".VERSION \"VB99.0\"\n"
@@ -212,16 +327,41 @@ class FootprintConverter(object):
             for padstack in self._padstacks.values():
                 f.write(str(padstack) + "\n")
 
-    def _convert_easyeda_shape_to_xpedition(self):
-        for rect in getattr(self._easyeda_footprint, "rectangles", []):
-            layer_name = self._get_easyeda_layer_name(getattr(rect, "layer_id", 0))
-            xpedition_layer_name = self._map_easyeda_layer_to_xpedition(layer_name)
-
-            if "UNKNOWN_LAYER" in xpedition_layer_name:
-                continue
-
-            # ToDo
+    def save_cell_to_file(self, filename: str):
+        with open(filename, 'w') as f:
+            f.write(".FILETYPE CELL_LIBRARY\n"
+                    ".VERSION \"1.01.01\"\n"
+                    ".CREATOR \"EasyEDA to Xpedition Converter\"\n"
+                    "\n"
+                    ".UNITS TH\n"
+                    "\n")
             
+            package_string = f".PACKAGE_CELL \"{self._cell.name}\"\n"
+            package_string += f" ..NUMBER_LAYERS {self._cell.number_layers}\n"
+            package_string += f" ..PACKAGE_GROUP {self._cell.package_group}\n"
+            package_string += f" ..MOUNT_TYPE {self._cell.mount_type}\n"
+            f.write(package_string)
+
+            for pin in self._cell.pins:
+                f.write(str(pin) + "\n")
+
+            for outline in self._cell.silkscreen_outlines:
+                f.write(str(outline) + "\n")
+
+            for outline in self._cell.assembly_outlines:
+                f.write(str(outline) + "\n")
+
+            for mask in self._cell.solder_masks:
+                f.write(str(mask) + "\n")
+
+            for paste in self._cell.solder_pastes:
+                f.write(str(paste) + "\n")
+
+            for outline in self._cell.placement_outlines:
+                f.write(str(outline) + "\n")
+
+            for text in self._cell.texts:
+                f.write(text + "\n")
 
 if __name__ == "__main__":
     tgt_folder = "../output"  # Specify your target folder here
@@ -231,5 +371,7 @@ if __name__ == "__main__":
 
     converter = FootprintConverter(easyead_cad_data, output_folder=tgt_folder)
     converter.convert()
+    converter.save_padstacks_to_file(f"{tgt_folder}/_Pads.hkp")
+    converter.save_cell_to_file(f"{tgt_folder}/_Cell.hkp")
 
-    print(f"Converted footprint saved to {tgt_folder}/_Pads.hkp")
+    print(f"Converted footprint Done. Pads saved to {tgt_folder}/_Pads.hkp and Cell saved to {tgt_folder}/_Cell.hkp")
