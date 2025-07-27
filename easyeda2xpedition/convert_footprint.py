@@ -106,11 +106,18 @@ class FootprintConverter(object):
                     hole_height = max(normalized_hole_points, key=lambda p: p[1])[1] - min(normalized_hole_points, key=lambda p: p[1])[1]
                     hole_length = round(max(hole_width, hole_height), 4)
                     hole_radius = round(ee_unit_to_th(pad.hole_radius), 4)
+                    if hole_height > hole_width:
+                        # this slot is vertical
+                        slot_width = hole_radius * 2
+                        slot_height = hole_length + hole_radius * 2
+                    else:
+                        slot_width = hole_length + hole_radius * 2
+                        slot_height = hole_radius * 2
 
                     xpedition_hole = SlotHole(
                         name=f"HOLE_{hole_radius * 2}x{hole_length}",
-                        width=hole_radius * 2,
-                        height=hole_length,
+                        width=slot_width,
+                        height=slot_height,
                         plated=pad.is_plated if hasattr(pad, "is_plated") else True
                     )
                 else:
@@ -195,6 +202,8 @@ class FootprintConverter(object):
         # Determine mount type based on padstacks
         if all("SMD" in key for key in self._padstacks.keys()):
                 mount_type = "SURFACE"
+        elif all("TH" in key for key in self._padstacks.keys()):
+            mount_type = "THROUGH"
         else:
             mount_type = "MIXED"
         self._cell.mount_type = mount_type
