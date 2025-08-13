@@ -20,6 +20,8 @@ class EasyedaPinType(Enum):
 class EeSymbolBbox(BaseModel):
     x: float
     y: float
+    width: float
+    height: float
 
 
 # ---------------- PIN ----------------
@@ -101,6 +103,34 @@ class EeSymbolPinName(BaseModel):
         return rotation or 0.0
 
 
+class EeSymbolPinNumber(BaseModel):
+    is_displayed: bool
+    pos_x: float
+    pos_y: float
+    rotation: int
+    text: str
+    text_anchor: str
+    font: str
+    font_size: float
+
+    @field_validator("font_size", mode="before")
+    @classmethod
+    def empty_str_font(cls, font_size: str) -> float:
+        if isinstance(font_size, str) and "pt" in font_size:
+            return float(font_size.replace("pt", ""))
+        return font_size or 7.0
+
+    @field_validator("is_displayed", mode="before")
+    @classmethod
+    def parse_display_field(cls, field: str) -> str:
+        return True if field == "show" else field
+
+    @field_validator("rotation", mode="before")
+    @classmethod
+    def empty_str_rotation(cls, rotation: str) -> str:
+        return rotation or 0.0
+
+
 class EeSymbolPinDotBis(BaseModel):
     is_displayed: bool
     circle_x: float
@@ -128,6 +158,7 @@ class EeSymbolPin:
     pin_dot: EeSymbolPinDot
     pin_path: EeSymbolPinPath
     name: EeSymbolPinName
+    number: EeSymbolPinNumber
     dot: EeSymbolPinDotBis
     clock: EeSymbolPinClock
 
@@ -178,7 +209,7 @@ class EeSymbolCircle(BaseModel):
 
 # ---------------- ARC ----------------
 class EeSymbolArc(BaseModel):
-    path: list
+    path: str
     helper_dots: str
     stroke_color: str
     stroke_width: str
@@ -197,10 +228,10 @@ class EeSymbolArc(BaseModel):
     def parse_background_filling(cls, fill_color: str) -> str:
         return bool(fill_color and fill_color.lower() != "none")
 
-    @field_validator("path", mode="before")
-    @classmethod
-    def convert_svg_path(cls, path: str) -> list:
-        return parse_svg_path(svg_path=path)
+    # @field_validator("path", mode="before")
+    # @classmethod
+    # def convert_svg_path(cls, path: str) -> list:
+    #     return parse_svg_path(svg_path=path)
 
 
 class EeSymbolEllipse(BaseModel):
@@ -224,6 +255,19 @@ class EeSymbolEllipse(BaseModel):
     @classmethod
     def parse_background_filling(cls, fill_color: str) -> str:
         return bool(fill_color and fill_color.lower() != "none")
+    
+
+class EeSymbolLine(BaseModel):
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+    stroke_color: str
+    stroke_width: str
+    stroke_style: str
+    fill_color: str
+    id: str
+    is_locked: bool
 
 
 # ---------------- POLYLINE ----------------
@@ -290,6 +334,7 @@ class EeSymbolInfo:
     datasheet: str = ""
     lcsc_id: str = ""
     jlc_id: str = ""
+    mpn: str = ""
 
 
 @dataclass
@@ -304,6 +349,7 @@ class EeSymbol:
     polylines: List[EeSymbolPolyline] = field(default_factory=list)
     polygons: List[EeSymbolPolygon] = field(default_factory=list)
     paths: List[EeSymbolPath] = field(default_factory=list)
+    lines: List[EeSymbolLine] = field(default_factory=list)
 
 
 # ------------------------- Footprint -------------------------

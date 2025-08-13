@@ -5,7 +5,9 @@ import requests
 
 __version__ = "0.1.0"
 
-API_ENDPOINT = "https://easyeda.com/api/products/{lcsc_id}/components?version=6.4.19.5"
+# API_ENDPOINT = "https://easyeda.com/api/products/{lcsc_id}/components?version=6.4.19.5"
+API_ENDPOINT = "https://lceda.cn/api/products/{lcsc_id}/components?version=6.4.19.5"
+
 ENDPOINT_3D_MODEL = "https://modules.easyeda.com/3dmodel/{uuid}"
 ENDPOINT_3D_MODEL_STEP = "https://modules.easyeda.com/qAxj6KHrDKw4blvCG8QJPs7Y/{uuid}"
 # ENDPOINT_3D_MODEL_STEP found in https://modules.lceda.cn/smt-gl-engine/0.8.22.6032922c/smt-gl-engine.js : points to the bucket containing the step files.

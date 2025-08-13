@@ -21,6 +21,10 @@ def add_easyeda_pin(pin_data: str, ee_symbol: EeSymbol):
         **dict(zip(EeSymbolPinName.__fields__, ee_segments[3][:]))
     )
 
+    pin_number = EeSymbolPinNumber(
+        **dict(zip(EeSymbolPinNumber.__fields__, ee_segments[4][:]))
+    )
+
     pin_dot_bis = EeSymbolPinDotBis(
         is_displayed=ee_segments[5][0],
         circle_x=float(ee_segments[5][1]),
@@ -34,6 +38,7 @@ def add_easyeda_pin(pin_data: str, ee_symbol: EeSymbol):
             pin_dot=pin_dot,
             pin_path=pin_path,
             name=pin_name,
+            number=pin_number,
             dot=pin_dot_bis,
             clock=pin_clock,
         )
@@ -92,6 +97,12 @@ def add_easyeda_arc(arc_data: str, ee_symbol: EeSymbol):
     )
 
 
+def add_easyeda_line(line_data: str, ee_symbol: EeSymbol):
+    ee_symbol.lines.append(
+        EeSymbolLine(**dict(zip(EeSymbolLine.__fields__, line_data.split("~")[1:])))
+    )
+
+
 easyeda_handlers = {
     "P": add_easyeda_pin,
     "R": add_easyeda_rectangle,
@@ -101,6 +112,7 @@ easyeda_handlers = {
     "PL": add_easyeda_polyline,
     "PG": add_easyeda_polygon,
     "PT": add_easyeda_path,
+    "L": add_easyeda_line,
     # "PI" : Pie, Elliptical arc seems to be not supported in Kicad
 }
 
@@ -122,14 +134,17 @@ class EasyedaSymbolImporter:
                 name=ee_data_info["name"],
                 prefix=ee_data_info["pre"],
                 package=ee_data_info.get("package", None),
-                manufacturer=ee_data_info.get("BOM_Manufacturer", None),
+                manufacturer=ee_data_info.get("Manufacturer", None),
                 datasheet=ee_data["lcsc"].get("url", None),
                 lcsc_id=ee_data["lcsc"].get("number", None),
-                jlc_id=ee_data_info.get("BOM_JLCPCB Part Class", None),
+                jlc_id=ee_data_info.get("JLCPCB Part Class", None),
+                mpn=ee_data_info.get("Manufacturer Part", None),
             ),
             bbox=EeSymbolBbox(
                 x=float(ee_data["dataStr"]["head"]["x"]),
                 y=float(ee_data["dataStr"]["head"]["y"]),
+                width=float(ee_data["dataStr"]["BBox"]["width"]),
+                height=float(ee_data["dataStr"]["BBox"]["height"]),
             ),
         )
 
