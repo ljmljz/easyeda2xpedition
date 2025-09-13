@@ -2,9 +2,9 @@ from easyeda.easyeda_importer import EasyedaSymbolImporter
 from easyeda.parameters_easyeda import EeSymbol, EeSymbolPin
 from easyeda.easyeda_api import EasyedaApi
 
-from xpedition.symbol import Symbol as XpeditionSymbol, SymbolPin, SymbolPinGroup
-from xpedition.symbol import SymbolPinPosition, SymbolLabel, SymbolAnnotation
-from xpedition.symbol import SymbolShapeLine, SymbolShapeCircle, SymbolShapeArc
+from xpedition.symbol.pin import SymbolPinPosition, SymbolPin, SymbolLabel, SymbolAnnotation, SymbolPinGroup
+from xpedition.symbol.symbol import Symbol as XpeditionSymbol
+from xpedition.symbol.symbol import SymbolShapeLine, SymbolShapeCircle, SymbolShapeArc
 
 
 def ee_unit_to_th(value: float) -> float:

@@ -1,14 +1,13 @@
 from easyeda import easyeda_importer
 from easyeda import easyeda_api
 
-from xpedition.pads import *
-from xpedition.padstacks import *
-from xpedition.holes import *
-from xpedition.shapes import *
-from xpedition.shapes.base import BaseShape
-from xpedition.cell import PIN as XpeditionPin
-from xpedition.cell import Cell as XpeditionCell
-from xpedition.cell import SilkscreenOutline, AssemblyOutline, SolderMask, SolderPaste, PlacementOutline
+from xpedition.footprint.pads import *
+from xpedition.footprint.padstacks import *
+from xpedition.footprint.holes import *
+from xpedition.footprint.shapes import *
+from xpedition.footprint.cell import PIN as XpeditionPin
+from xpedition.footprint.cell import Cell as XpeditionCell
+from xpedition.footprint.cell import SilkscreenOutline, AssemblyOutline, SolderMask, SolderPaste, PlacementOutline
 import re
 
 def ee_unit_to_th(value: float) -> float:

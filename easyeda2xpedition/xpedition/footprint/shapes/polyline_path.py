@@ -1,4 +1,4 @@
-from xpedition.shapes.base import BaseShape
+from xpedition.footprint.shapes.base import BaseShape
 
 class PolylinePath(BaseShape):
     """
