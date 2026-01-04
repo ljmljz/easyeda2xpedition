@@ -338,8 +338,8 @@ class EeSymbolInfo:
 
 
 @dataclass
-class EeSymbol:
-    info: EeSymbolInfo
+class EeSymbolSub:
+    name: str
     bbox: EeSymbolBbox
     pins: List[EeSymbolPin] = field(default_factory=list)
     rectangles: List[EeSymbolRectangle] = field(default_factory=list)
@@ -351,6 +351,25 @@ class EeSymbol:
     paths: List[EeSymbolPath] = field(default_factory=list)
     lines: List[EeSymbolLine] = field(default_factory=list)
 
+# @dataclass
+# class EeSymbol:
+#     info: EeSymbolInfo
+#     bbox: EeSymbolBbox
+#     pins: List[EeSymbolPin] = field(default_factory=list)
+#     rectangles: List[EeSymbolRectangle] = field(default_factory=list)
+#     circles: List[EeSymbolCircle] = field(default_factory=list)
+#     arcs: List[EeSymbolArc] = field(default_factory=list)
+#     ellipses: List[EeSymbolEllipse] = field(default_factory=list)
+#     polylines: List[EeSymbolPolyline] = field(default_factory=list)
+#     polygons: List[EeSymbolPolygon] = field(default_factory=list)
+#     paths: List[EeSymbolPath] = field(default_factory=list)
+#     lines: List[EeSymbolLine] = field(default_factory=list)
+
+@dataclass
+class EeSymbol:
+    info: EeSymbolInfo
+    bbox: EeSymbolBbox
+    subs: List[EeSymbolSub] = field(default_factory=list)
 
 # ------------------------- Footprint -------------------------
 

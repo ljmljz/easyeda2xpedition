@@ -148,12 +148,48 @@ class EasyedaSymbolImporter:
             ),
         )
 
-        for line in ee_data["dataStr"]["shape"]:
-            designator = line.split("~")[0]
-            if designator in easyeda_handlers:
-                easyeda_handlers[designator](line, new_ee_symbol)
-            else:
-                logging.warning(f"Unknow symbol designator : {designator}")
+        if "subparts" in ee_data["dataStr"] and len(ee_data["dataStr"]["subparts"]) > 0:
+            for sub in ee_data["dataStr"]["subparts"]:
+                new_sub_symbol = EeSymbolSub(
+                    name=sub["title"],
+                    bbox=EeSymbolBbox(
+                        x=float(sub["x"]),
+                        y=float(sub["y"]),
+                        width=float(sub["width"]),
+                        height=float(sub["height"]),
+                    ),
+                )
+                new_ee_symbol.subs.append(new_sub_symbol)
+                for line in sub["shape"]:
+                    designator = line.split("~")[0]
+                    if designator in easyeda_handlers:
+                        easyeda_handlers[designator](line, new_sub_symbol)
+                    else:
+                        logging.warning(f"Unknow symbol designator : {designator}")
+                        
+                new_ee_symbol.subs.append(new_sub_symbol)
+        elif "shape" in ee_data["dataStr"] and len(ee_data["dataStr"]["shape"]) > 0:
+            new_ee_symbol.subs.append(
+                EeSymbolSub(
+                    name=f"{ee_data_info["name"]}.1",
+                    bbox=EeSymbolBbox(
+                        x=float(ee_data["dataStr"]["head"]["x"]),
+                        y=float(ee_data["dataStr"]["head"]["y"]),
+                        width=float(ee_data["dataStr"]["BBox"]["width"]),
+                        height=float(ee_data["dataStr"]["BBox"]["height"]),
+                    ),
+                )
+            )
+
+            new_sub_symbol = new_ee_symbol.subs[0]
+            for line in ee_data["dataStr"]["shape"]:
+                designator = line.split("~")[0]
+                if designator in easyeda_handlers:
+                    easyeda_handlers[designator](line, new_sub_symbol)
+                else:
+                    logging.warning(f"Unknow symbol designator : {designator}")
+        else:
+            logging.warning("No shape data found in the EasyEDA symbol")
 
         return new_ee_symbol
 

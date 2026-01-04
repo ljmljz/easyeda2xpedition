@@ -299,7 +299,8 @@ class EeSymbolToXpeditionSymbol(object):
 
 
 if __name__ == "__main__":
-    lcsc_id = "C165948"  # 可替换为其它LCSC ID
+    # lcsc_id = "C165948"  # 可替换为其它LCSC ID
+    lcsc_id = "C730227"
     cad_data = EasyedaApi().get_cad_data_of_component(lcsc_id)
     converter = EeSymbolToXpeditionSymbol(cad_data)
     converter.convert()
