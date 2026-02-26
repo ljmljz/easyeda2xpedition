@@ -6,6 +6,13 @@ class SymbolPinPosition(object):
         self.start_y = start_y
         self.end_x = end_x
         self.end_y = end_y
+    
+    def move(self, dx: float, dy: float):
+        """Move the pin position by the given offset."""
+        self.start_x += dx
+        self.start_y += dy
+        self.end_x += dx
+        self.end_y += dy
 
 
 class SymbolPin(object):
@@ -15,6 +22,10 @@ class SymbolPin(object):
         self.rotation = rotation # 0: 0deg, 1: 90deg, 2: 180deg, 3: 270deg
         self.side = side # 0: top, 1: bottom, 2: left, 3: right
         self.inverted = inverted # 0: normal, 1: inverted
+
+    def move(self, dx: float, dy: float):
+        """Move the pin by the given offset."""
+        self.pos.move(dx, dy)
 
     def __str__(self):
         pin_string = "P "
@@ -37,6 +48,11 @@ class SymbolLabel(object):
         self.scope = 0 # 1: global, 0: local
         self.visible = visible # 0: invisible, 1: visible, 2: name only, 3: value only
         self.logic_sense = 0 # 0: normal, 1: inverted
+
+    def move(self, dx: float, dy: float):
+        """Move the label by the given offset."""
+        self.x += dx
+        self.y += dy
 
     def __str__(self):
         label_string = "L "
@@ -61,6 +77,11 @@ class SymbolAnnotation(object):
         self.anchor = anchor
         self.visible = visible # 0: invisible, 1: visible, 2: name only, 3: value only
 
+    def move(self, dx: float, dy: float):
+        """Move the annotation by the given offset."""
+        self.x += dx
+        self.y += dy
+
     def __str__(self):
         annotation_string = "A "
         annotation_string += f"{self.x} {self.y} "
@@ -77,6 +98,13 @@ class SymbolPinGroup:
     pin: SymbolPin
     label: SymbolLabel
     annotations: list[SymbolAnnotation]
+
+    def move(self, dx: float, dy: float):
+        """Move the pin group by the given offset."""
+        self.pin.move(dx, dy)
+        self.label.move(dx, dy)
+        for annotation in self.annotations:
+            annotation.move(dx, dy)
 
     def __str__(self):
         group_string = str(self.pin)
