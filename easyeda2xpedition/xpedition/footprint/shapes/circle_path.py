@@ -13,6 +13,11 @@ class CirclePath(BaseShape):
         self.radius = radius
         self.width = width
 
+    def move(self, dx: float, dy: float):
+        """Move the circle by the specified offset."""
+        self.center_x += dx
+        self.center_y += dy
+
     def __str__(self):
         shape_string = f"{self.indent(self._level)}{self.shape}\n"
         shape_string += f"{self.indent(self._level + 1)}WIDTH {self.width}\n"

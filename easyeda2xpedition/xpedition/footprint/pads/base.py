@@ -12,6 +12,10 @@ class BasePad(object):
         """Set the offset for the pad."""
         self.offset = (x, y)
 
+    def move(self, dx: float, dy: float):
+        """Move the pad by the specified offset."""
+        self.offset = (self.offset[0] + dx, self.offset[1] + dy)
+
     def __str__(self):
         pad_string = f".PAD \"{self.name}\"\n"
         pad_string += f"..PAD_OPTIONS {self.pad_options}\n"

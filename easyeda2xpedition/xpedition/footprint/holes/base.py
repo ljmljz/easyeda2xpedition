@@ -13,6 +13,10 @@ class BaseHole(object):
     def set_tol(self, pos: int, neg: int):
         """Set the offset for the pad."""
         self.tol = (pos, neg)
+
+    def move(self, dx: float, dy: float):
+        """Move method placeholder. Holes are positioned via PIN objects, not directly."""
+        pass
         
     def __str__(self):
         """Return a string representation of the hole."""
