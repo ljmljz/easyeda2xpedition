@@ -9,5 +9,9 @@ class BaseShape(object):
         
         return indent_string
     
+    def move(self, dx: float, dy: float):
+        """Move the shape by the specified offset. Subclasses should override this method."""
+        pass
+    
     def to_string(self):
         self.__str__()

@@ -13,6 +13,21 @@ import re
 def ee_unit_to_th(value: float) -> float:
     return value * 10
 
+def apply_vertical_mirror(y: float, bbox_height: float) -> float:
+    """
+    Apply vertical mirroring transformation to convert EasyEDA coordinate system
+    to Xpedition coordinate system. This flips the Y-axis.
+    
+    Args:
+        y: The Y coordinate after bbox normalization
+        bbox_height: The height of the bounding box for reference
+        
+    Returns:
+        The mirrored Y coordinate
+    """
+    return -y
+
+
 class FootprintConverter(object):
     def __init__(self, easyeda_cp_cad_data: dict, output_folder: str = None):
         self._easyeda_cp_cad_data = easyeda_cp_cad_data
@@ -157,6 +172,7 @@ class FootprintConverter(object):
             # Create a new pin for the pad SMD and TH
             x = ee_unit_to_th(pad.center_x) - ee_unit_to_th(self._bbox.x)
             y = ee_unit_to_th(pad.center_y) - ee_unit_to_th(self._bbox.y)
+            y = apply_vertical_mirror(y, ee_unit_to_th(self._bbox.height))
             pin = XpeditionPin(pad.number, x, y, xpedition_padstack, pad.rotation)
             self._cell.add_pin(pin)
 
@@ -195,6 +211,7 @@ class FootprintConverter(object):
             pin_number = self._cell.get_pin_count() + 1
             x = ee_unit_to_th(hole.center_x) - ee_unit_to_th(self._bbox.x)
             y = ee_unit_to_th(hole.center_y) - ee_unit_to_th(self._bbox.y)
+            y = apply_vertical_mirror(y, ee_unit_to_th(self._bbox.height))
             pin = XpeditionPin(pin_number, x, y, xpedition_padstack, 0)
             self._cell.add_pin(pin)
 
@@ -233,6 +250,7 @@ class FootprintConverter(object):
 
             cx = ee_unit_to_th(getattr(rect, "x", 0)) - ee_unit_to_th(self._bbox.x)
             cy = ee_unit_to_th(getattr(rect, "y", 0)) - ee_unit_to_th(self._bbox.y)
+            cy = apply_vertical_mirror(cy, ee_unit_to_th(self._bbox.height))
             width = ee_unit_to_th(getattr(rect, "width", 0))
             height = ee_unit_to_th(getattr(rect, "height", 0))
             points = ((cx - width/2, cy + height/2), (cx + width/2, cy + height/2), (cx + width/2, cy - height/2), (cx - width/2, cy - height/2))
@@ -246,6 +264,7 @@ class FootprintConverter(object):
             
             cx = ee_unit_to_th(getattr(circle, "cx", 0)) - ee_unit_to_th(self._bbox.x)
             cy = ee_unit_to_th(getattr(circle, "cy", 0)) - ee_unit_to_th(self._bbox.y)
+            cy = apply_vertical_mirror(cy, ee_unit_to_th(self._bbox.height))
             radius = ee_unit_to_th(getattr(circle, "radius", 0))
             width = ee_unit_to_th(getattr(circle, "stroke_width", 0))
             shape = CirclePath(center_x=cx, center_y=cy, radius=radius, width=width)
@@ -271,7 +290,10 @@ class FootprintConverter(object):
             if point_string:
                 pts = [float(x) for x in point_string.replace(",", " ").split()]
                 for i in range(0, len(pts), 2):
-                    points.append((ee_unit_to_th(pts[i]) - ee_unit_to_th(self._bbox.x), ee_unit_to_th(pts[i + 1]) - ee_unit_to_th(self._bbox.y)))
+                    px = ee_unit_to_th(pts[i]) - ee_unit_to_th(self._bbox.x)
+                    py = ee_unit_to_th(pts[i + 1]) - ee_unit_to_th(self._bbox.y)
+                    py = apply_vertical_mirror(py, ee_unit_to_th(self._bbox.height))
+                    points.append((px, py))
 
             width = ee_unit_to_th(getattr(track, "stroke_width", 0))
             shape = PolylinePath(points=points, width=width)
@@ -287,7 +309,10 @@ class FootprintConverter(object):
                 cleaned = re.sub(r'[MLHVCSQTAZmlhvcsqtaz]', ' ', point_string)
                 pts = [float(x) for x in cleaned.replace(",", " ").split() if x.strip()]
                 for i in range(0, len(pts), 2):
-                    points.append((ee_unit_to_th(pts[i]) - ee_unit_to_th(self._bbox.x), ee_unit_to_th(pts[i + 1]) - ee_unit_to_th(self._bbox.y)))
+                    px = ee_unit_to_th(pts[i]) - ee_unit_to_th(self._bbox.x)
+                    py = ee_unit_to_th(pts[i + 1]) - ee_unit_to_th(self._bbox.y)
+                    py = apply_vertical_mirror(py, ee_unit_to_th(self._bbox.height))
+                    points.append((px, py))
 
             shape = PolylineShape(points=points)
             self._add_shape_to_cell(shape, layer_name)
@@ -302,18 +327,23 @@ class FootprintConverter(object):
                 cleaned = re.sub(r'[MLHVCSQTAZmlhvcsqtaz]', ' ', point_string)
                 pts = [float(x) for x in cleaned.replace(",", " ").split() if x.strip()]
                 for i in range(0, len(pts), 2):
-                    points.append((ee_unit_to_th(pts[i]) - ee_unit_to_th(self._bbox.x), ee_unit_to_th(pts[i + 1]) - ee_unit_to_th(self._bbox.y)))
+                    px = ee_unit_to_th(pts[i]) - ee_unit_to_th(self._bbox.x)
+                    py = ee_unit_to_th(pts[i + 1]) - ee_unit_to_th(self._bbox.y)
+                    py = apply_vertical_mirror(py, ee_unit_to_th(self._bbox.height))
+                    points.append((px, py))
 
             shape = PolylineShape(points=points)
             self._add_shape_to_cell(shape, layer_name)
 
         # add placement outline
         grow_size = 10  # 10 mils grow size for the placement outline
+        bbox_width = ee_unit_to_th(self._easyeda_footprint.bbox.width / 2)
+        bbox_height = ee_unit_to_th(self._easyeda_footprint.bbox.height / 2)
         points = [
-            (-ee_unit_to_th(self._easyeda_footprint.bbox.width / 2) - grow_size, -ee_unit_to_th(self._easyeda_footprint.bbox.height / 2) - grow_size),
-            (ee_unit_to_th(self._easyeda_footprint.bbox.width / 2) + grow_size, -ee_unit_to_th(self._easyeda_footprint.bbox.height / 2) - grow_size),
-            (ee_unit_to_th(self._easyeda_footprint.bbox.width / 2) + grow_size, ee_unit_to_th(self._easyeda_footprint.bbox.height / 2) + grow_size),
-            (-ee_unit_to_th(self._easyeda_footprint.bbox.width / 2) - grow_size, ee_unit_to_th(self._easyeda_footprint.bbox.height / 2) + grow_size)
+            (-bbox_width - grow_size, apply_vertical_mirror(-bbox_height - grow_size, ee_unit_to_th(self._easyeda_footprint.bbox.height))),
+            (bbox_width + grow_size, apply_vertical_mirror(-bbox_height - grow_size, ee_unit_to_th(self._easyeda_footprint.bbox.height))),
+            (bbox_width + grow_size, apply_vertical_mirror(bbox_height + grow_size, ee_unit_to_th(self._easyeda_footprint.bbox.height))),
+            (-bbox_width - grow_size, apply_vertical_mirror(bbox_height + grow_size, ee_unit_to_th(self._easyeda_footprint.bbox.height)))
         ]
         shape = PolylineShape(points=points, filled=False)
         outline = PlacementOutline(shape=shape)

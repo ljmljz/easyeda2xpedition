@@ -10,6 +10,11 @@ class PIN(object):
         self.padstack = padstack
         self.rotation = rotation
 
+    def move(self, dx: float, dy: float):
+        """Move the pin by the specified offset."""
+        self.x += dx
+        self.y += dy
+
     def __str__(self):
         pin_string = f" ..PIN \"{self.number}\"\n"
         pin_string += f"  ...XY ({round(self.x, 4)}, {round(self.y, 4)})\n"

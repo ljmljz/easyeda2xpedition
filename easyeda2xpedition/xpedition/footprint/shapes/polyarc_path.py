@@ -7,8 +7,12 @@ class PolyarcPath(BaseShape):
     def __init__(self, points, width, level=3):
         super().__init__(level)
         self.shape = "POLYARC_PATH"
-        self.points = points  # List of tuples (x, y)
+        self.points = points  # List of tuples (x, y, arc_param)
         self.width = width
+
+    def move(self, dx: float, dy: float):
+        """Move all points by the specified offset."""
+        self.points = [(x + dx, y + dy, arc) for x, y, arc in self.points]
 
     def __str__(self):
         shape_string = f"{self.indent(self._level)}{self.shape}\n"

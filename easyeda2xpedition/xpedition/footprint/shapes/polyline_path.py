@@ -10,6 +10,10 @@ class PolylinePath(BaseShape):
         self.points = points  # List of tuples (x, y)
         self.width = width
 
+    def move(self, dx: float, dy: float):
+        """Move all points by the specified offset."""
+        self.points = [(x + dx, y + dy) for x, y in self.points]
+
     def __str__(self):
         shape_string = f"{self.indent(self._level)}{self.shape}\n"
         shape_string += f"{self.indent(self._level + 1)}WIDTH {self.width}\n"
