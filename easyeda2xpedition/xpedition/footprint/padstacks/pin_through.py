@@ -1,4 +1,4 @@
-from xpedition.footprint.padstacks.base import BasePadStack
+from easyeda2xpedition.xpedition.footprint.padstacks.base import BasePadStack
 
 class PinThroughPadStack(BasePadStack):
     def __init__(self, name: str):

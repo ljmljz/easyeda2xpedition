@@ -1,0 +1,21 @@
+# Development and testing dependencies for EasyEDA2Xpedition
+
+# Core dependencies (also in requirements.txt)
+requests
+pydantic
+
+# Testing
+pytest>=6.0
+pytest-cov>=2.12.0
+pytest-mock>=3.6.0
+
+# Code quality
+pylint>=2.9.0
+black>=21.6b0
+flake8>=3.9.0
+
+# Type checking
+mypy>=0.910
+
+# Documentation
+sphinx>=4.0.2

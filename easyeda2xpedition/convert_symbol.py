@@ -1,10 +1,10 @@
-from easyeda.easyeda_importer import EasyedaSymbolImporter
-from easyeda.parameters_easyeda import EeSymbol, EeSymbolPin, EeSymbolSub
-from easyeda.easyeda_api import EasyedaApi
+from easyeda2xpedition.easyeda.easyeda_importer import EasyedaSymbolImporter
+from easyeda2xpedition.easyeda.parameters_easyeda import EeSymbol, EeSymbolPin, EeSymbolSub
+from easyeda2xpedition.easyeda.easyeda_api import EasyedaApi
 
-from xpedition.symbol.pin import SymbolPinPosition, SymbolPin, SymbolLabel, SymbolAnnotation, SymbolPinGroup
-from xpedition.symbol.symbol import Symbol as XpeditionSymbol
-from xpedition.symbol.symbol import SymbolShapeLine, SymbolShapeCircle, SymbolShapeArc
+from easyeda2xpedition.xpedition.symbol.pin import SymbolPinPosition, SymbolPin, SymbolLabel, SymbolAnnotation, SymbolPinGroup
+from easyeda2xpedition.xpedition.symbol.symbol import Symbol as XpeditionSymbol
+from easyeda2xpedition.xpedition.symbol.symbol import SymbolShapeLine, SymbolShapeCircle, SymbolShapeArc
 
 
 def ee_unit_to_th(value: float) -> float:
@@ -328,7 +328,10 @@ class EeSymbolToXpeditionSymbol(object):
         rotation = pin.settings.rotation
         # this is a h pin
         if "h" in path:
-            path_list = path.replace("M", "").replace("h", "").split()
+            if ',' in path:
+                path_list = path.replace("M", "").replace("h", ",").split(',')
+            else:
+                path_list = path.replace("M", "").replace("h", " ").split()
             x1 = float(path_list[0])
             y1 = float(path_list[1])
             x2 = float(path_list[0]) + float(path_list[2])
@@ -359,7 +362,10 @@ class EeSymbolToXpeditionSymbol(object):
                     x1, y1, x2, y2 = x1, y1, x1, y1 - float(path_list[2])
                     side = 1
         else: # this is a v pin
-            path_list = path.replace("M", "").replace("v", "").split()
+            if ',' in path:
+                path_list = path.replace("M", "").replace("v", ",").split(',')
+            else:
+                path_list = path.replace("M", "").replace("v", " ").split()
             x1 = float(path_list[0])
             y1 = float(path_list[1])
             x2 = float(path_list[0])
@@ -614,4 +620,4 @@ if __name__ == "__main__":
     converter = EeSymbolToXpeditionSymbol(cad_data)
     converter.convert()
     # save_to_file will automatically add .1, .2, .3 for multi-part symbols
-    converter.save_to_file(f"..\\output\\{lcsc_id}_xpedition")
+    converter.save_to_file(f".\\output\\{lcsc_id}_xpedition")

@@ -1,5 +1,5 @@
-from xpedition.footprint.padstacks.base import BasePadStack
-from xpedition.footprint.shapes.base import BaseShape
+from easyeda2xpedition.xpedition.footprint.padstacks.base import BasePadStack
+from easyeda2xpedition.xpedition.footprint.shapes.base import BaseShape
 
 
 class PIN(object):

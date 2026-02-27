@@ -1,4 +1,4 @@
-from xpedition.footprint.shapes.base import BaseShape
+from easyeda2xpedition.xpedition.footprint.shapes.base import BaseShape
 
 class PolyarcPath(BaseShape):
     """

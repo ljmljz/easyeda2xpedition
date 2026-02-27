@@ -1,4 +1,4 @@
-from xpedition.footprint.holes.base import BaseHole
+from easyeda2xpedition.xpedition.footprint.holes.base import BaseHole
 
 class RectangleHole(BaseHole):
     def __init__(self, name: str, width: int, height: int, plated: bool = False, drill_type: str = "DRILLED", tol: tuple = (0, 0)):
