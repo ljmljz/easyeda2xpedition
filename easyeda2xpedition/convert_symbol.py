@@ -1,5 +1,5 @@
 from easyeda2xpedition.easyeda.easyeda_importer import EasyedaSymbolImporter
-from easyeda2xpedition.easyeda.parameters_easyeda import EeSymbol, EeSymbolPin, EeSymbolSub
+from easyeda2xpedition.easyeda.parameters_easyeda import EeSymbolPin, EeSymbolSub
 from easyeda2xpedition.easyeda.easyeda_api import EasyedaApi
 
 from easyeda2xpedition.xpedition.symbol.pin import SymbolPinPosition, SymbolPin, SymbolLabel, SymbolAnnotation, SymbolPinGroup
@@ -8,7 +8,7 @@ from easyeda2xpedition.xpedition.symbol.symbol import SymbolShapeLine, SymbolSha
 
 
 def ee_unit_to_th(value: float) -> float:
-    return value * 1
+    return round(value * 1, 2)
 
 class EeSymbolToXpeditionSymbol(object):
     def __init__(self, easyeda_cad_data: dict):
@@ -584,33 +584,50 @@ class EeSymbolToXpeditionSymbol(object):
         Args:
             file_path: Base file path without extension (e.g., "output/symbol_name")
         """
+        def _generate_symbol_string(part, part_name=None):
+            sym_string = "V 50\n"
+            sym_string += f"K {__import__('random').randint(1000000000, 9999999999)} {self.xpedition_symbol.name}\n"
+            sym_string += "Y 1\n"
+            sym_string += "Z 0\n"
+            sym_string += "i 0\n"
+
+            sym_string += f"U 0 0 10 0 5 0 {self.xpedition_symbol.name}\n"
+            sym_string += "U 0 0 5 0 5 0 Copyright=EasyEDA to Xpedition\n"
+            if self.xpedition_symbol.mfg_name:
+                sym_string += f"U 0 0 5 0 5 0 Mfr_name={self.xpedition_symbol.mfg_name}\n"
+            if self.xpedition_symbol.mpn:
+                sym_string += f"U 0 0 5 0 5 0 Manufacturer_Part_Number={self.xpedition_symbol.mpn}\n"
+
+            sym_string += str(part)
+
+            sym_string += f"U 20 40 8 0 5 3 REFDES={self.xpedition_symbol.refdes.upper()}\n"
+            sym_string += "U 20 30 8 0 5 0 TYPE=Type?\n"
+            sym_string += f"U 20 30 8 0 5 0 VALUE={self.xpedition_symbol.value}\n"
+
+            if part_name:
+                sym_string += "U 20 20 8 0 5 0 HETERO=" + ",".join(
+                    f"({sym_name.replace('.', '_')})" for sym_name in self.xpedition_symbol.parts.keys()
+                ) + "\n"
+
+            sym_string += "E\n"
+            return sym_string
+
         # Check if the symbol has multiple parts
-        if len(self.xpedition_symbol.parts) > 0:
+        if len(self.xpedition_symbol.parts) > 1:
             # Save each part to a separate file
             for part_name in sorted(self.xpedition_symbol.parts.keys()):
-                # Extract the part number from part_name (e.g., "symbol.1" -> 1)
                 part_num = part_name.split('.')[-1] if '.' in part_name else "1"
                 output_file = f"{file_path}.{part_num}"
-                
-                # Create a temporary symbol with only this part for output
                 part = self.xpedition_symbol.parts[part_name]
-                
+
                 with open(output_file, "w") as f:
-                    sym_string = "V 50\n"
-                    sym_string += f"K {__import__('random').randint(1000000000, 9999999999)} {part.name}\n"
-                    sym_string += "Y 1\n"
-                    sym_string += f"K {__import__('random').randint(1000000000, 9999999999)} {part.name}\n"
-                    sym_string += str(part)
-                    sym_string += f"U 140 40 8 0 5 3 REFDES={self.xpedition_symbol.refdes.upper()}\n"
-                    sym_string += "U 140 30 8 0 5 0 TYPE=Type?\n"
-                    sym_string += f"U 140 30 8 0 5 0 VALUE={self.xpedition_symbol.value}\n"
-                    sym_string += "E\n"
-                    f.write(sym_string)
+                    f.write(_generate_symbol_string(part, part_name))
         else:
             # Save as single file (backward compatibility)
-            with open(file_path, "w") as f:
-                sym_string = str(self.xpedition_symbol)
-                f.write(sym_string)
+            part = self.xpedition_symbol.parts.get(self.xpedition_symbol.name)
+            if part:
+                with open(file_path, "w") as f:
+                    f.write(_generate_symbol_string(part))
 
 
 if __name__ == "__main__":
