@@ -2,8 +2,8 @@
 import json
 import logging
 
-from easyeda.easyeda_api import EasyedaApi
-from easyeda.parameters_easyeda import *
+from easyeda2xpedition.easyeda.easyeda_api import EasyedaApi
+from easyeda2xpedition.easyeda.parameters_easyeda import *
 
 
 def add_easyeda_pin(pin_data: str, ee_symbol: EeSymbol):
@@ -148,19 +148,19 @@ class EasyedaSymbolImporter:
             ),
         )
 
-        if "subparts" in ee_data["dataStr"] and len(ee_data["dataStr"]["subparts"]) > 0:
-            for sub in ee_data["dataStr"]["subparts"]:
+        if "subparts" in ee_data and len(ee_data["subparts"]) > 0:
+            for sub in ee_data["subparts"]:
                 new_sub_symbol = EeSymbolSub(
                     name=sub["title"],
                     bbox=EeSymbolBbox(
-                        x=float(sub["x"]),
-                        y=float(sub["y"]),
-                        width=float(sub["width"]),
-                        height=float(sub["height"]),
+                        x=float(sub['dataStr']['BBox']["x"]),
+                        y=float(sub['dataStr']['BBox']["y"]),
+                        width=float(sub['dataStr']['BBox']["width"]),
+                        height=float(sub['dataStr']['BBox']["height"]),
                     ),
                 )
-                new_ee_symbol.subs.append(new_sub_symbol)
-                for line in sub["shape"]:
+
+                for line in sub['dataStr']["shape"]:
                     designator = line.split("~")[0]
                     if designator in easyeda_handlers:
                         easyeda_handlers[designator](line, new_sub_symbol)
@@ -173,8 +173,8 @@ class EasyedaSymbolImporter:
                 EeSymbolSub(
                     name=f"{ee_data_info["name"]}.1",
                     bbox=EeSymbolBbox(
-                        x=float(ee_data["dataStr"]["head"]["x"]),
-                        y=float(ee_data["dataStr"]["head"]["y"]),
+                        x=float(ee_data["dataStr"]["BBox"]["x"]),
+                        y=float(ee_data["dataStr"]["BBox"]["y"]),
                         width=float(ee_data["dataStr"]["BBox"]["width"]),
                         height=float(ee_data["dataStr"]["BBox"]["height"]),
                     ),

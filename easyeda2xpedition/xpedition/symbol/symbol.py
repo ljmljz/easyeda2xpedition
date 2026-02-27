@@ -1,6 +1,6 @@
 import random
 
-from xpedition.symbol.pin import SymbolPinGroup
+from easyeda2xpedition.xpedition.symbol.pin import SymbolPinGroup
 
 
 class SymbolPart(object):

@@ -1,2 +1,2 @@
-from xpedition.footprint.padstacks.pin_smd import PinSMDPadStack
-from xpedition.footprint.padstacks.pin_through import PinThroughPadStack
+from easyeda2xpedition.xpedition.footprint.padstacks.pin_smd import PinSMDPadStack
+from easyeda2xpedition.xpedition.footprint.padstacks.pin_through import PinThroughPadStack

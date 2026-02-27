@@ -1,4 +1,4 @@
-from xpedition.footprint.pads.base import BasePad
+from easyeda2xpedition.xpedition.footprint.pads.base import BasePad
 
 class PolygonPad(BasePad):
     def __init__(self, name: str, points: list, offset: tuple = (0, 0)):

@@ -1,4 +1,4 @@
-from xpedition.footprint.pads.base import BasePad
+from easyeda2xpedition.xpedition.footprint.pads.base import BasePad
 
 class OctagonPad(BasePad):
     def __init__(self, name: str, width: int, offset: tuple = (0, 0)):
