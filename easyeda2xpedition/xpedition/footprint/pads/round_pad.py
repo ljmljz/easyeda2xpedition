@@ -1,4 +1,4 @@
-from xpedition.pads.base import BasePad
+from xpedition.footprint.pads.base import BasePad
 
 class RoundPad(BasePad):
     def __init__(self, name: str, diameter: float, offset: tuple = (0, 0)):

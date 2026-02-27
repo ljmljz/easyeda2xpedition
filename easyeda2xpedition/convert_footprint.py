@@ -11,7 +11,7 @@ from xpedition.footprint.cell import SilkscreenOutline, AssemblyOutline, SolderM
 import re
 
 def ee_unit_to_th(value: float) -> float:
-    return value * 10
+    return round(value * 10, 2)
 
 def apply_vertical_mirror(y: float, bbox_height: float) -> float:
     """
@@ -95,6 +95,23 @@ class FootprintConverter(object):
             elif pad.shape.upper() == "OVAL":
                 xpedition_pad = OblongPad(name=pad_name, width=width, height=height)
                 large_xpedition_pad = OblongPad(name=f"{pad_name}L", width=large_width, height=large_height)
+            # There is no "ELLIPSE" shape in Xpedition, we will treat it as an oblong pad with the same width and height as the ellipse
+            elif pad.shape.upper() == "ELLIPSE":
+                xpedition_pad = OblongPad(name=pad_name, width=width, height=height)
+                large_xpedition_pad = OblongPad(name=f"{pad_name}L", width=large_width, height=large_height)
+            elif pad.shape.upper() == "POLYGON":
+                points = []
+                point_string = getattr(pad, "points", "")
+                if point_string:
+                    pts = [float(v) for v in point_string.replace(",", " ").split()]
+                    for i in range(0, len(pts), 2):
+                        px = ee_unit_to_th(pts[i])
+                        py = ee_unit_to_th(pts[i + 1])
+                        points.append((px, py))
+
+                xpedition_pad = PolygonPad(name=pad_name, points=points)
+                large_points = [(px * (large_width / width), py * (large_height / height)) for (px, py) in points]
+                large_xpedition_pad = PolygonPad(name=f"{pad_name}L", points=large_points)
             else:
                 raise ValueError(f"Unsupported pad shape: {pad.shape}")
             
@@ -277,7 +294,7 @@ class FootprintConverter(object):
             points = getattr(arc, "points", [])
             width = ee_unit_to_th(getattr(arc, "stroke_width", 0))
 
-            # need to convert SVG ARC to PolyarcPath
+            # Todo: implement SVG arc to PolyarcPath conversion
             # shape = PolyarcPath(points=points, width=width)
 
             # self._add_shape_to_cell(shape, layer_name)
@@ -402,7 +419,7 @@ class FootprintConverter(object):
                 f.write(text + "\n")
 
 if __name__ == "__main__":
-    tgt_folder = "../output"  # Specify your target folder here
+    tgt_folder = "./output"  # Specify your target folder here
     easyead_cad_data = easyeda_api.EasyedaApi().get_cad_data_of_component(
         lcsc_id="C165948"
     )  # Replace with a valid LCSC ID
