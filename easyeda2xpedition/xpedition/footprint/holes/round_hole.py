@@ -1,4 +1,4 @@
-from xpedition.holes.base import BaseHole
+from xpedition.footprint.holes.base import BaseHole
 
 class RoundHole(BaseHole):
     def __init__(self, name: str, diameter: float, plated: bool = False, drill_type: str ="DRILLED", tol: tuple = (0, 0)):

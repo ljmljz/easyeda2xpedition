@@ -1,4 +1,4 @@
-from xpedition.padstacks.base import BasePadStack
+from xpedition.footprint.padstacks.base import BasePadStack
 
 class PinThroughPadStack(BasePadStack):
     def __init__(self, name: str):

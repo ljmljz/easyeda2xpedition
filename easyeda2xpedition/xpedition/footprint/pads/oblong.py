@@ -1,4 +1,4 @@
-from xpedition.pads.base import BasePad
+from xpedition.footprint.pads.base import BasePad
 
 class OblongPad(BasePad):
     def __init__(self, name: str, width: int, height: int, offset: tuple = (0, 0)):

@@ -11,3 +11,4 @@ from xpedition.footprint.pads.square import SquarePad
 from xpedition.footprint.pads.round_finger import RoundFingerPad
 from xpedition.footprint.pads.octagonal_finger import OctagonalFingerPad
 from xpedition.footprint.pads.square_donut import SquareDonutPad
+from easyeda2xpedition.xpedition.footprint.pads.polygon import PolygonPad

@@ -1,5 +1,5 @@
-from xpedition.padstacks.base import BasePadStack
-from xpedition.shapes.base import BaseShape
+from xpedition.footprint.padstacks.base import BasePadStack
+from xpedition.footprint.shapes.base import BaseShape
 
 
 class PIN(object):
