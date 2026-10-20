@@ -7,7 +7,6 @@ setup(
     author="Jimmy Li",
     packages=find_packages(),
     install_requires=[
-        "PyQt5>=5.15.0",
         "requests>=2.25.0",
         "pydantic>=1.8.0",
     ],
