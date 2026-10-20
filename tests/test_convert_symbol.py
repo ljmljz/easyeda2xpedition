@@ -11,6 +11,7 @@ This module contains tests for the EeSymbolToXpeditionSymbol class, covering:
 """
 
 import pytest
+from types import SimpleNamespace
 from unittest.mock import Mock, MagicMock, patch, mock_open
 from easyeda2xpedition.convert_symbol import EeSymbolToXpeditionSymbol
 
@@ -19,14 +20,125 @@ class TestSymbolUnitConversion:
     """Tests for unit conversion in symbol conversion."""
 
     def test_ee_unit_to_th_for_symbols(self):
-        """Test that EasyEDA units convert 1:1 to Xpedition for symbols."""
-        # In symbol conversion, the conversion is 1:1
+        """Test that EasyEDA symbol units map 1:1 to the Xpedition V 50 symbol unit."""
         from easyeda2xpedition.convert_symbol import ee_unit_to_th
-        
+
         assert ee_unit_to_th(100.0) == 100.0
         assert ee_unit_to_th(50.5) == 50.5
         assert ee_unit_to_th(0.0) == 0.0
         assert ee_unit_to_th(-25.0) == -25.0
+
+
+class TestSymbolGridAlignment:
+    """Tests for aligning symbol pins and outlines to the 0.1 inch grid."""
+
+    @patch('easyeda2xpedition.convert_symbol.EasyedaSymbolImporter')
+    def test_pins_and_outline_align_to_point_one_inch_grid(self, mock_importer_class):
+        mock_importer_class.return_value.get_symbol.return_value = MagicMock(
+            info=MagicMock(name="TEST"),
+            subs=[],
+            pins=[]
+        )
+        converter = EeSymbolToXpeditionSymbol({})
+        bbox = SimpleNamespace(x=473.9, y=249.7)
+        pin = SimpleNamespace(pin_path=SimpleNamespace(path="M 495 260 h 10"))
+
+        converter._align_to_grid(bbox, [pin])
+
+        assert converter._x(495, bbox) == 20
+        assert converter._y(260, bbox) == -10
+        assert converter._x(505, bbox) == 30
+        assert converter._x(555, bbox) == 80
+        assert converter._y(250, bbox) == 0
+        assert converter._y(380, bbox) == -130
+
+    @patch('easyeda2xpedition.convert_symbol.EasyedaSymbolImporter')
+    def test_convert_subpart_aligns_before_conversion(self, mock_importer_class):
+        mock_importer_class.return_value.get_symbol.return_value = MagicMock(
+            info=MagicMock(name="TEST"),
+            subs=[],
+            pins=[]
+        )
+        converter = EeSymbolToXpeditionSymbol({})
+        bbox = SimpleNamespace(x=327.6, y=134.7)
+        pin = SimpleNamespace(pin_path=SimpleNamespace(path="M 330 145 h 10"))
+        subpart = MagicMock(bbox=bbox, pins=[pin])
+
+        with patch.object(converter, 'convert_pin_groups_for_subpart'), \
+                patch.object(converter, 'convert_shapes_for_subpart'):
+            converter.convert_subpart(subpart, "TEST.1")
+
+        assert converter._x(330, bbox) == 0
+        assert converter._y(145, bbox) == -10
+        assert converter._x(340, bbox) == 10
+        assert converter._y(135, bbox) == 0
+
+
+class TestSymbolPinLength:
+    """Tests for the generated 0.2 inch pin length."""
+
+    @patch('easyeda2xpedition.convert_symbol.EasyedaSymbolImporter')
+    def make_converter(self, mock_importer_class):
+        mock_importer_class.return_value.get_symbol.return_value = MagicMock(
+            info=MagicMock(name="TEST"),
+            subs=[],
+            pins=[]
+        )
+        return EeSymbolToXpeditionSymbol({})
+
+    def _pin(self, path, rotation):
+        return SimpleNamespace(
+            pin_path=SimpleNamespace(path=path),
+            settings=SimpleNamespace(rotation=rotation),
+        )
+
+    def test_left_pin_has_point_two_inch_length(self):
+        converter = self.make_converter()
+        bbox = SimpleNamespace(x=473.9, y=249.7)
+        pin = self._pin("M 495 260 h 10", 180)
+        converter._align_to_grid(bbox, [pin])
+
+        body_x, body_y, end_x, end_y, side = converter._pin_endpoints(pin, bbox)
+
+        assert (body_x, body_y) == (30, -10)
+        assert (end_x, end_y) == (10, -10)
+        assert side == 2
+
+    def test_right_pin_has_point_two_inch_length(self):
+        converter = self.make_converter()
+        bbox = SimpleNamespace(x=473.9, y=249.7)
+        pin = self._pin("M 565 340 h -10", 180)
+        converter._align_to_grid(bbox, [pin])
+
+        body_x, body_y, end_x, end_y, side = converter._pin_endpoints(pin, bbox)
+
+        assert (body_x, body_y) == (80, -90)
+        assert (end_x, end_y) == (100, -90)
+        assert side == 3
+
+    def test_top_pin_extends_upwards(self):
+        converter = self.make_converter()
+        bbox = SimpleNamespace(x=90, y=40)
+        pin = self._pin("M 100 50 v 10", 0)
+        converter._align_to_grid(bbox, [pin])
+
+        body_x, body_y, end_x, end_y, side = converter._pin_endpoints(pin, bbox)
+
+        assert side == 0
+        assert (body_x, body_y) == (10, -20)
+        assert (end_x, end_y) == (10, 0)
+
+    def test_bottom_pin_extends_downwards(self):
+        converter = self.make_converter()
+        bbox = SimpleNamespace(x=90, y=40)
+        pin = self._pin("M 100 60 v -10", 0)
+        converter._align_to_grid(bbox, [pin])
+
+        body_x, body_y, end_x, end_y, side = converter._pin_endpoints(pin, bbox)
+
+        assert side == 1
+        assert (body_x, body_y) == (10, -10)
+        assert (end_x, end_y) == (10, -30)
 
 
 class TestSymbolConverterInitialization:
@@ -686,13 +798,12 @@ class TestFileOutput:
         )
 
         converter = EeSymbolToXpeditionSymbol({})
-        converter.xpedition_symbol.parts = {}
-        
-        mock_file.return_value.write(MagicMock())
-        
+        converter.xpedition_symbol.name = "TEST"
+        converter.xpedition_symbol.parts = {"TEST": MagicMock()}
+
         # Should not raise an error
         converter.save_to_file("test_symbol")
-        
+
         mock_file.assert_called_once_with("test_symbol", "w")
 
     @patch('easyeda2xpedition.convert_symbol.EasyedaSymbolImporter')

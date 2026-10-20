@@ -23,3 +23,4 @@ class CirclePath(BaseShape):
         shape_string += f"{self.indent(self._level + 1)}WIDTH {self.width}\n"
         shape_string += f"{self.indent(self._level + 1)}XY ({self.center_x}, {self.center_y})\n"
         shape_string += f"{self.indent(self._level + 1)}RADIUS {self.radius}\n"
+        return shape_string

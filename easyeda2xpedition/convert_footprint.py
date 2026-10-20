@@ -8,10 +8,70 @@ from easyeda2xpedition.xpedition.footprint.shapes import *
 from easyeda2xpedition.xpedition.footprint.cell import PIN as XpeditionPin
 from easyeda2xpedition.xpedition.footprint.cell import Cell as XpeditionCell
 from easyeda2xpedition.xpedition.footprint.cell import SilkscreenOutline, AssemblyOutline, SolderMask, SolderPaste, PlacementOutline
+import math
 import re
 
 def ee_unit_to_th(value: float) -> float:
     return round(value * 10, 2)
+
+
+def sample_svg_arc(x0, y0, rx, ry, x_axis_rotation, large_arc, sweep, x1, y1, segments=24):
+    """Sample an SVG elliptical arc (W3C implementation notes) into points."""
+    rx = abs(rx)
+    ry = abs(ry)
+    if rx == 0 or ry == 0:
+        return [(x0, y0), (x1, y1)]
+
+    phi = math.radians(x_axis_rotation % 360)
+    dx2 = (x0 - x1) / 2.0
+    dy2 = (y0 - y1) / 2.0
+    x1p = math.cos(phi) * dx2 + math.sin(phi) * dy2
+    y1p = -math.sin(phi) * dx2 + math.cos(phi) * dy2
+
+    lam = (x1p ** 2) / (rx ** 2) + (y1p ** 2) / (ry ** 2)
+    if lam > 1:
+        scale = math.sqrt(lam)
+        rx *= scale
+        ry *= scale
+
+    sign = -1.0 if large_arc == sweep else 1.0
+    num = rx ** 2 * ry ** 2 - rx ** 2 * y1p ** 2 - ry ** 2 * x1p ** 2
+    den = rx ** 2 * y1p ** 2 + ry ** 2 * x1p ** 2
+    coef = sign * math.sqrt(max(0.0, num / den)) if den else 0.0
+    cxp = coef * rx * y1p / ry
+    cyp = -coef * ry * x1p / rx
+    cx = math.cos(phi) * cxp - math.sin(phi) * cyp + (x0 + x1) / 2.0
+    cy = math.sin(phi) * cxp + math.cos(phi) * cyp + (y0 + y1) / 2.0
+
+    def _angle(ux, uy, vx, vy):
+        dot = ux * vx + uy * vy
+        norm = math.hypot(ux, uy) * math.hypot(vx, vy)
+        if norm == 0:
+            return 0.0
+        value = max(-1.0, min(1.0, dot / norm))
+        angle = math.acos(value)
+        if ux * vy - uy * vx < 0:
+            angle = -angle
+        return angle
+
+    ux = (x1p - cxp) / rx
+    uy = (y1p - cyp) / ry
+    vx = (-x1p - cxp) / rx
+    vy = (-y1p - cyp) / ry
+    theta1 = _angle(1.0, 0.0, ux, uy)
+    delta = _angle(ux, uy, vx, vy)
+    if not sweep and delta > 0:
+        delta -= 2 * math.pi
+    elif sweep and delta < 0:
+        delta += 2 * math.pi
+
+    points = []
+    for i in range(segments + 1):
+        t = theta1 + delta * i / segments
+        px = cx + rx * math.cos(t) * math.cos(phi) - ry * math.sin(t) * math.sin(phi)
+        py = cy + rx * math.cos(t) * math.sin(phi) + ry * math.sin(t) * math.cos(phi)
+        points.append((px, py))
+    return points
 
 def apply_vertical_mirror(y: float, bbox_height: float) -> float:
     """
@@ -68,7 +128,51 @@ class FootprintConverter(object):
             "BottomAssembly": "ASSEMBLY_OUTLINE",
             "ComponentShapeLayer": "ASSEMBLY_OUTLINE",
         }
+        # EasyEDA sometimes uses layers that are not listed in ``layers``.
+        # 99 = ComponentPolarityLayer, 100 = LeadShapeLayer.
+        id_layer_map = {
+            "99": "ComponentPolarityLayer",
+            "100": "LeadShapeLayer",
+        }
+        layer_name = id_layer_map.get(layer_name, layer_name)
+        if layer_name == "ComponentPolarityLayer":
+            return "SILKSCREEN_OUTLINE"
+        if layer_name == "LeadShapeLayer":
+            return "ASSEMBLY_OUTLINE"
         return layer_map.get(layer_name, f"UNKNOWN_LAYER_{layer_name}")
+
+    @staticmethod
+    def _ellipse_points(width: float, height: float, segments: int = 32) -> list:
+        rx = width / 2.0
+        ry = height / 2.0
+        return [
+            (round(rx * math.cos(2 * math.pi * i / segments), 4),
+             round(ry * math.sin(2 * math.pi * i / segments), 4))
+            for i in range(segments)
+        ]
+
+    def _to_cell_point(self, raw_x: float, raw_y: float):
+        """Convert an EasyEDA footprint point to the centred, mirrored cell space."""
+        x = ee_unit_to_th(float(raw_x) - self._bbox.x)
+        y = -ee_unit_to_th(float(raw_y) - self._bbox.y)
+        return (x, y)
+
+    def _sample_arc(self, path: str, segments: int = 24) -> list:
+        match = re.search(
+            r"M\s*(-?\d+(?:\.\d+)?)[\s,]+(-?\d+(?:\.\d+)?)\s*"
+            r"A\s*(-?\d+(?:\.\d+)?)[\s,]+(-?\d+(?:\.\d+)?)[\s,]+"
+            r"(-?\d+(?:\.\d+)?)[\s,]+([01])[\s,]+([01])[\s,]+"
+            r"(-?\d+(?:\.\d+)?)[\s,]+(-?\d+(?:\.\d+)?)",
+            path,
+        )
+        if not match:
+            return []
+        x0, y0, rx, ry, phi, large, sweep, x1, y1 = match.groups()
+        raw_points = sample_svg_arc(
+            float(x0), float(y0), float(rx), float(ry), float(phi),
+            int(large), int(sweep), float(x1), float(y1), segments,
+        )
+        return [self._to_cell_point(px, py) for px, py in raw_points]
 
     def convert(self):
         self._convert_easyeda_padstack_to_xpedition()
@@ -80,7 +184,8 @@ class FootprintConverter(object):
         """Convert EasyEDA padstacks to Xpedition padstacks."""
         for pad in self._easyeda_footprint.pads:
             width = ee_unit_to_th(pad.width)
-            large_width = width + 8 # 8 mils larger for the solder mask/paste
+            # Solder mask gets 4 mil expansion per side. Solder paste stays at pad size.
+            large_width = width + 8
             height = ee_unit_to_th(pad.height)
             large_height = height + 8
             pad_name = f"{pad.shape}_{width}x{height}"            
@@ -95,22 +200,28 @@ class FootprintConverter(object):
             elif pad.shape.upper() == "OVAL":
                 xpedition_pad = OblongPad(name=pad_name, width=width, height=height)
                 large_xpedition_pad = OblongPad(name=f"{pad_name}L", width=large_width, height=large_height)
-            # There is no "ELLIPSE" shape in Xpedition, we will treat it as an oblong pad with the same width and height as the ellipse
+            # Xpedition has no native ellipse pad, so approximate it with a
+            # filled polygon (an oblong would be a rounded rectangle, not an ellipse).
             elif pad.shape.upper() == "ELLIPSE":
-                xpedition_pad = OblongPad(name=pad_name, width=width, height=height)
-                large_xpedition_pad = OblongPad(name=f"{pad_name}L", width=large_width, height=large_height)
+                xpedition_pad = PolygonPad(name=pad_name, points=self._ellipse_points(width, height))
+                large_xpedition_pad = PolygonPad(name=f"{pad_name}L", points=self._ellipse_points(large_width, large_height))
             elif pad.shape.upper() == "POLYGON":
-                points = []
                 point_string = getattr(pad, "points", "")
+                center_x = float(getattr(pad, "center_x", 0) or 0)
+                center_y = float(getattr(pad, "center_y", 0) or 0)
+                points = []
                 if point_string:
                     pts = [float(v) for v in point_string.replace(",", " ").split()]
                     for i in range(0, len(pts), 2):
-                        px = ee_unit_to_th(pts[i])
-                        py = ee_unit_to_th(pts[i + 1])
+                        px = ee_unit_to_th(pts[i] - center_x)
+                        py = -ee_unit_to_th(pts[i + 1] - center_y)
                         points.append((px, py))
 
                 xpedition_pad = PolygonPad(name=pad_name, points=points)
-                large_points = [(px * (large_width / width), py * (large_height / height)) for (px, py) in points]
+                if width and height:
+                    large_points = [(px * (large_width / width), py * (large_height / height)) for (px, py) in points]
+                else:
+                    large_points = points
                 large_xpedition_pad = PolygonPad(name=f"{pad_name}L", points=large_points)
             else:
                 raise ValueError(f"Unsupported pad shape: {pad.shape}")
@@ -290,14 +401,15 @@ class FootprintConverter(object):
 
         for arc in getattr(self._easyeda_footprint, "arcs", []):
             layer_name = self._get_easyeda_layer_name(getattr(arc, "layer_id", 0))
-            
-            points = getattr(arc, "points", [])
+
+            points = self._sample_arc(getattr(arc, "path", ""))
             width = ee_unit_to_th(getattr(arc, "stroke_width", 0))
+            if not points:
+                print(f"Warning: Could not parse footprint arc path '{getattr(arc, 'path', '')}'. Skipping shape.")
+                continue
 
-            # Todo: implement SVG arc to PolyarcPath conversion
-            # shape = PolyarcPath(points=points, width=width)
-
-            # self._add_shape_to_cell(shape, layer_name)
+            shape = PolylinePath(points=points, width=width)
+            self._add_shape_to_cell(shape, layer_name)
 
         for track in getattr(self._easyeda_footprint, "tracks", []):
             layer_name = self._get_easyeda_layer_name(getattr(track, "layer_id", 0))

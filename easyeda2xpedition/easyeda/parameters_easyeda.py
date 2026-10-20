@@ -72,7 +72,8 @@ class EeSymbolPinPath(BaseModel):
     @field_validator("path", mode="before")
     @classmethod
     def tune_path(cls, field: str) -> str:
-        return field.replace("v", "h")
+        # Keep the original path: a vertical pin ("v"/"V") must stay vertical.
+        return field.replace(",", " ")
 
 
 class EeSymbolPinName(BaseModel):
