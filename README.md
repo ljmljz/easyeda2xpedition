@@ -15,6 +15,9 @@ EasyEDA2Xpedition is a Python tool that converts PCB designs and components from
 - **Support for Multiple Pad Types**: Handles RECT, ROUND, OVAL, ELLIPSE, and POLYGON pads
 - **Layer Mapping**: Automatically maps EasyEDA layers to Xpedition layers (silkscreen, solder mask, paste, assembly)
 - **Coordinate Transformation**: Applies proper coordinate system transformations between formats
+- **Symbol Grid Alignment**: Snaps pins and outlines to the Symbol Editor's 0.1 inch grid and generates 0.2 inch pins
+- **Solder Mask and Paste Rules**: Expands solder mask by 4 mil per side, keeps paste at pad size, and skips paste on through-hole pads
+- **Built-in Viewer**: Previews converted footprints, padstacks and symbols with layer toggles
 
 ## Installation
 
@@ -101,6 +104,15 @@ converter = EeSymbolToXpeditionSymbol(easyeda_data)
 xpedition_symbol = converter.convert()
 ```
 
+### Viewers
+
+Preview converted or source data with the built-in Tk viewers:
+
+```bash
+python -m easyeda2xpedition.viewer.xpedition_viewer
+python -m easyeda2xpedition.viewer.easyeda_viewer
+```
+
 ## Project Structure
 
 ```
@@ -123,6 +135,8 @@ easyeda2xpedition/
 │       ├── pin.py               # Symbol pin definitions
 │       └── symbol.py            # Symbol structure
 └── viewer/                       # Visualization utilities
+    ├── easyeda_viewer.py         # EasyEDA footprint/symbol viewer
+    └── xpedition_viewer.py       # Xpedition footprint/symbol viewer
 ```
 
 ## File Formats
@@ -174,12 +188,16 @@ The project includes comprehensive tests for footprint and symbol conversion:
 
 - `tests/test_convert_footprint.py` - Footprint conversion tests
 - `tests/test_convert_symbol.py` - Symbol conversion tests
+- `tests/test_accuracy_fixes.py` - Regression tests for symbol grid alignment, pin length and pad mask/paste sizing
+- `tests/test_viewer_parser.py` - Viewer parsing tests
 - `tests/conftest.py` - Shared test fixtures and utilities
 
 Tests cover:
-- Unit conversion (EasyEDA units to Xpedition thousandths)
+- Unit conversion (EasyEDA 10 mil units to Xpedition V 50 10 mil units)
 - Pad shape conversions
 - Padstack generation
+- Solder mask and paste sizing
 - Layer mapping
 - Coordinate transformations
+- Symbol grid alignment and pin length
 - Pin conversions
