@@ -209,6 +209,10 @@ class Cell(object):
         """Add a placement outline to the cell."""
         self.placement_outlines.append(outline)
 
+    def add_text(self, text: str):
+        """Add a user-defined text block to the cell."""
+        self.texts.append(text)
+
     def get_pin_count(self):
         """Get the count of pins in the cell."""
         return len(self.pins)

@@ -13,6 +13,8 @@ EasyEDA2Xpedition is a Python tool that converts PCB designs and components from
 - **Symbol Conversion**: Converts EasyEDA schematic symbols to Xpedition symbol format
 - **Component Data Retrieval**: Integrates with LCSC database via EasyEDA API
 - **Support for Multiple Pad Types**: Handles RECT, ROUND, OVAL, ELLIPSE, and POLYGON pads
+- **Footprint Shapes and Text**: Converts tracks, polylines, polygons, paths, and silkscreen/assembly text
+- **Symbol Shape Support**: Converts rectangles, circles, ellipses, polylines, polygons, lines, and arcs
 - **Layer Mapping**: Automatically maps EasyEDA layers to Xpedition layers (silkscreen, solder mask, paste, assembly)
 - **Coordinate Transformation**: Applies proper coordinate system transformations between formats
 - **Symbol Grid Alignment**: Snaps pins and outlines to the Symbol Editor's 0.1 inch grid and generates 0.2 inch pins

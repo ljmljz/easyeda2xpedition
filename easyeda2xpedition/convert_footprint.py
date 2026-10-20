@@ -157,6 +157,33 @@ class FootprintConverter(object):
         y = -ee_unit_to_th(float(raw_y) - self._bbox.y)
         return (x, y)
 
+    @staticmethod
+    def _escape_xpedition_text(value: str) -> str:
+        return (
+            value.replace("\\", "\\\\")
+            .replace('"', '\\"')
+            .replace("\n", " ")
+            .replace("\r", " ")
+        )
+
+    @staticmethod
+    def _format_text_value(value) -> str:
+        return f"{float(value):g}"
+
+    def _text_layer_name(self, easyeda_layer_name: str) -> str:
+        xpedition_layer = self._map_easyeda_layer_to_xpedition(easyeda_layer_name)
+        if xpedition_layer.startswith("UNKNOWN_LAYER_"):
+            return ""
+        if xpedition_layer == "SILKSCREEN_OUTLINE":
+            return (
+                "SILKSCREEN_OPP_SIDE"
+                if "Bottom" in easyeda_layer_name
+                else "SILKSCREEN_MNT_SIDE"
+            )
+        if xpedition_layer == "ASSEMBLY_OUTLINE":
+            return "ASSEMBLY"
+        return xpedition_layer
+
     def _sample_arc(self, path: str, segments: int = 24) -> list:
         match = re.search(
             r"M\s*(-?\d+(?:\.\d+)?)[\s,]+(-?\d+(?:\.\d+)?)\s*"
@@ -417,8 +444,8 @@ class FootprintConverter(object):
             point_string = getattr(track, "points", "")
             points = []
             if point_string:
-                pts = [float(x) for x in point_string.replace(",", " ").split()]
-                for i in range(0, len(pts), 2):
+                pts = [float(v) for v in re.findall(r"-?\d+(?:\.\d+)?", point_string)]
+                for i in range(0, len(pts) - 1, 2):
                     px = ee_unit_to_th(pts[i]) - ee_unit_to_th(self._bbox.x)
                     py = ee_unit_to_th(pts[i + 1]) - ee_unit_to_th(self._bbox.y)
                     py = apply_vertical_mirror(py, ee_unit_to_th(self._bbox.height))
@@ -463,6 +490,47 @@ class FootprintConverter(object):
 
             shape = PolylineShape(points=points)
             self._add_shape_to_cell(shape, layer_name)
+
+        for text in getattr(self._easyeda_footprint, "texts", []):
+            text_value = getattr(text, "text", "")
+            if not getattr(text, "is_displayed", True) or not text_value:
+                continue
+
+            layer_name = self._get_easyeda_layer_name(getattr(text, "layer_id", 0))
+            text_layer = self._text_layer_name(layer_name)
+            if not text_layer:
+                print(f"Warning: Text layer '{layer_name}' is not mapped to a known Xpedition layer. Skipping text.")
+                continue
+
+            cx = ee_unit_to_th(getattr(text, "center_x", 0) or 0) - ee_unit_to_th(self._bbox.x)
+            cy = ee_unit_to_th(getattr(text, "center_y", 0) or 0) - ee_unit_to_th(self._bbox.y)
+            cy = apply_vertical_mirror(cy, ee_unit_to_th(self._bbox.height))
+
+            height = ee_unit_to_th(getattr(text, "font_size", 0) or 0)
+            if height <= 0:
+                height = 50.0
+            stroke = ee_unit_to_th(getattr(text, "stroke_width", 0) or 0)
+            if stroke <= 0:
+                stroke = 3.0
+            rotation = getattr(text, "rotation", 0) or 0
+
+            escaped_text = self._escape_xpedition_text(str(text_value))
+            text_string = (
+                f' ..TEXT "{escaped_text}"\n'
+                "  ...TEXT_TYPE USER_DEFINED\n"
+                "   ...DISPLAY_ATTR\n"
+                f"    ....XY ({self._format_text_value(cx)}, {self._format_text_value(cy)})\n"
+                f"    ....TEXT_LYR {text_layer}\n"
+                "    ....HORZ_JUST CENTER\n"
+                "    ....VERT_JUST CENTER\n"
+                f"    ....HEIGHT {self._format_text_value(height)}\n"
+                "    ....WIDTH 0\n"
+                f"    ....STROKE_WIDTH {self._format_text_value(stroke)}\n"
+                f"    ....ROTATION {self._format_text_value(rotation)}\n"
+                '    ....FONT "vf_std"\n'
+                "    ....TEXT_OPTIONS NONE\n"
+            )
+            self._cell.add_text(text_string)
 
         # add placement outline
         grow_size = 10  # 10 mils grow size for the placement outline
