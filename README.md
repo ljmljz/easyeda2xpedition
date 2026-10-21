@@ -1,16 +1,17 @@
 # EasyEDA2Xpedition
 
 This project is inspired by [EasyEDA2KiCAD.py](https://github.com/uPesy/easyeda2kicad.py)  
-It aims to convert EasyEDA Symbol/Footprint to Mentor Graphics Xpedition Symbol/Footprint files.
+It aims to convert EasyEDA Symbols, Footprints and Parts to Mentor Graphics Xpedition Symbol/Footprint/Part files.
 
 ## Overview
 
-EasyEDA2Xpedition is a Python tool that converts PCB designs and components from EasyEDA format to Mentor Graphics Xpedition format. It supports both footprint and symbol conversions, enabling workflows that transition from EasyEDA to Xpedition-based PCB design.
+EasyEDA2Xpedition is a Python tool that converts PCB designs and components from EasyEDA format to Mentor Graphics Xpedition format. It supports footprint, symbol and part (PDB) conversions, enabling workflows that transition from EasyEDA to Xpedition-based PCB design.
 
 ## Features
 
 - **Footprint Conversion**: Converts EasyEDA footprints to Xpedition Cell and Padstack formats (.hkp)
 - **Symbol Conversion**: Converts EasyEDA schematic symbols to Xpedition symbol format
+- **Part/PDB Conversion**: Generates Xpedition ASCII_PDB part libraries with gate, symbol and slot pin mappings
 - **Component Data Retrieval**: Integrates with LCSC database via EasyEDA API
 - **Support for Multiple Pad Types**: Handles RECT, ROUND, OVAL, ELLIPSE, and POLYGON pads
 - **Footprint Shapes and Text**: Converts tracks, polylines, polygons, paths, and silkscreen/assembly text
@@ -106,6 +107,28 @@ converter = EeSymbolToXpeditionSymbol(easyeda_data)
 xpedition_symbol = converter.convert()
 ```
 
+### Part/PDB Conversion
+
+To convert an EasyEDA component to an Xpedition ASCII_PDB part:
+
+```python
+from easyeda2xpedition.convert_parts import EeSymbolToXpeditionPart
+from easyeda2xpedition.easyeda.easyeda_api import EasyedaApi
+
+# Retrieve component data from LCSC
+api = EasyedaApi()
+easyeda_data = api.get_cad_data_of_component(lcsc_id="C25804")
+
+# Convert and save the PDB part
+converter = EeSymbolToXpeditionPart(easyeda_data)
+converter.save_to_file("./output/_Parts.pdb.hkp")
+```
+
+The generated part uses the LCSC ID as the part number, the EasyEDA symbol name
+as the part name, and the EasyEDA package as the top cell. Pass
+`symbol_library="MyLibrary"` to change the symbol library prefix and
+`part_number="CUSTOM-1"` to override the part number.
+
 ### Viewers
 
 Preview converted or source data with the built-in Tk viewers:
@@ -121,6 +144,7 @@ python -m easyeda2xpedition.viewer.easyeda_viewer
 easyeda2xpedition/
 ├── convert_footprint.py          # Footprint conversion logic
 ├── convert_symbol.py             # Symbol conversion logic
+├── convert_parts.py              # Part/PDB conversion logic
 ├── easyeda/
 │   ├── easyeda_api.py           # API client for EasyEDA/LCSC
 │   ├── easyeda_importer.py      # Data parsing and importing
@@ -133,9 +157,11 @@ easyeda2xpedition/
 │   │   ├── holes/               # Hole definitions
 │   │   ├── shapes/              # Shape definitions for polygons and paths
 │   │   └── cell.py              # Cell and pin definitions
-│   └── symbol/
-│       ├── pin.py               # Symbol pin definitions
-│       └── symbol.py            # Symbol structure
+│   ├── symbol/
+│   │   ├── pin.py               # Symbol pin definitions
+│   │   └── symbol.py            # Symbol structure
+│   └── parts/
+│       └── part.py              # Part/PDB structure and serialization
 └── viewer/                       # Visualization utilities
     ├── easyeda_viewer.py         # EasyEDA footprint/symbol viewer
     └── xpedition_viewer.py       # Xpedition footprint/symbol viewer
@@ -177,6 +203,7 @@ pytest -v tests/
 # Run specific test file
 pytest tests/test_convert_footprint.py
 pytest tests/test_convert_symbol.py
+pytest tests/test_convert_parts.py
 
 # Run with coverage report
 pytest --cov=easyeda2xpedition tests/
@@ -190,6 +217,7 @@ The project includes comprehensive tests for footprint and symbol conversion:
 
 - `tests/test_convert_footprint.py` - Footprint conversion tests
 - `tests/test_convert_symbol.py` - Symbol conversion tests
+- `tests/test_convert_parts.py` - Part/PDB conversion tests
 - `tests/test_accuracy_fixes.py` - Regression tests for symbol grid alignment, pin length and pad mask/paste sizing
 - `tests/test_viewer_parser.py` - Viewer parsing tests
 - `tests/conftest.py` - Shared test fixtures and utilities
@@ -203,3 +231,4 @@ Tests cover:
 - Coordinate transformations
 - Symbol grid alignment and pin length
 - Pin conversions
+- Part/PDB metadata, gate, symbol and slot pin mappings
