@@ -1,20 +1,24 @@
 """
 Xpedition HKP File Viewer using tkinter.
 
-Supports preview for footprints, padstacks and symbols.
+Supports preview for parts, footprints, padstacks and symbols.
 """
 
+import glob
 import math
 import os
 import re
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, scrolledtext, ttk
 
 
 POINT_RE = re.compile(
     r"\(\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)\s*,\s*"
     r"([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)\s*\)"
 )
+
+QUOTED_RE = re.compile(r'"((?:\\.|[^"\\])*)"')
+CELL_NAME_RE = re.compile(r'\.PACKAGE_CELL\s+"([^"]+)"', re.IGNORECASE)
 
 CELL_SECTION_HEADERS = {
     "..PIN",
@@ -35,7 +39,7 @@ CELL_LAYER_NAMES = {
 
 
 class XpeditionViewer:
-    """Viewer for Xpedition HKP files (footprints and symbols)."""
+    """Viewer for Xpedition HKP files (parts, footprints and symbols)."""
 
     LAYER_STYLE = {
         "Pads": {"fill": "#d9a05b", "outline": "#8b5a2b", "width": 1},
@@ -46,7 +50,7 @@ class XpeditionViewer:
         "SOLDER_PASTE": {"fill": "#ececec", "outline": "#a0a0a0", "width": 1, "stipple": "gray50"},
         "PLACEMENT_OUTLINE": {"fill": "", "outline": "#c000c0", "width": 1, "dash": (6, 3)},
         "Pins": {"fill": "#ffd000", "outline": "#a06000", "width": 1},
-        "Body": {"fill": "", "outline": "#111111", "width": 2},
+        "Body": {"fill": "", "outline": "#2f6db3", "width": 1, "dash": (6, 3)},
         "PinLines": {"fill": "", "outline": "#333333", "width": 1},
         "PinNames": {"fill": "#204080"},
         "PinNumbers": {"fill": "#b00000"},
@@ -65,8 +69,8 @@ class XpeditionViewer:
 
     def __init__(self, root):
         self.root = root
-        self.root.title("Xpedition HKP Viewer - Footprint & Symbol Preview")
-        self.root.geometry("1100x760")
+        self.root.title("Xpedition HKP Viewer - Part, Footprint & Symbol Preview")
+        self.root.geometry("1400x800")
 
         self.canvas = None
         self.layers = {}
@@ -80,6 +84,13 @@ class XpeditionViewer:
         self.padstacks = {}
         self.holes = {}
         self.current_file_path = None
+        self.part_library = []
+        self.current_part = None
+        self.current_part_file = None
+        self.current_part_symbol_path = None
+        self.current_part_cell_path = None
+        self.symbol_sources = []
+        self.current_symbol_index = 0
         self._last_pan = None
         self._fit_pending = False
 
@@ -89,15 +100,44 @@ class XpeditionViewer:
         toolbar = tk.Frame(self.root)
         toolbar.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
 
-        tk.Button(toolbar, text="Load Footprint", command=self.load_footprint_file).pack(side=tk.LEFT, padx=5)
+        tk.Button(toolbar, text="Load Part", command=self.load_part_file).pack(side=tk.LEFT, padx=5)
+        tk.Button(toolbar, text="Load Footprint", command=self.load_footprint_file).pack(side=tk.LEFT, padx=2)
         tk.Button(toolbar, text="Load Symbol", command=self.load_symbol_file).pack(side=tk.LEFT, padx=2)
+        self.part_symbol_button = tk.Button(
+            toolbar, text="Part Symbol", command=self.show_part_symbol, state=tk.DISABLED
+        )
+        self.part_symbol_button.pack(side=tk.LEFT, padx=2)
+        self.part_footprint_button = tk.Button(
+            toolbar, text="Part Footprint", command=self.show_part_footprint, state=tk.DISABLED
+        )
+        self.part_footprint_button.pack(side=tk.LEFT, padx=2)
         tk.Button(toolbar, text="Zoom In", command=self.zoom_in).pack(side=tk.LEFT, padx=2)
         tk.Button(toolbar, text="Zoom Out", command=self.zoom_out).pack(side=tk.LEFT, padx=2)
         tk.Button(toolbar, text="Fit View", command=self.fit_view).pack(side=tk.LEFT, padx=2)
         tk.Button(toolbar, text="Clear View", command=self.clear_view).pack(side=tk.LEFT, padx=2)
 
-        canvas_frame = tk.Frame(self.root)
-        canvas_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        content_frame = tk.Frame(self.root)
+        content_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        properties_frame = tk.LabelFrame(content_frame, text="Part Properties")
+        properties_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(5, 0))
+
+        self.properties_text = scrolledtext.ScrolledText(
+            properties_frame, width=48, wrap=tk.WORD, state=tk.DISABLED
+        )
+        self.properties_text.pack(fill=tk.BOTH, expand=True)
+
+        canvas_frame = tk.Frame(content_frame)
+        canvas_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.symbol_selector_frame = tk.Frame(canvas_frame)
+        self.symbol_selector_frame.pack(side=tk.TOP, fill=tk.X, pady=(0, 4))
+        tk.Label(self.symbol_selector_frame, text="Subpart:").pack(side=tk.LEFT, padx=(0, 5))
+        self.sub_selector = ttk.Combobox(
+            self.symbol_selector_frame, state="disabled", width=48
+        )
+        self.sub_selector.pack(side=tk.LEFT)
+        self.sub_selector.bind("<<ComboboxSelected>>", self._on_symbol_selected)
 
         self.canvas = tk.Canvas(canvas_frame, bg="white", cursor="cross")
         self.canvas.pack(fill=tk.BOTH, expand=True)
@@ -114,7 +154,9 @@ class XpeditionViewer:
         self.layers_container = tk.Frame(controls_frame)
         self.layers_container.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        self.status_var = tk.StringVar(value="Load a footprint (.hkp) or a symbol file")
+        self.status_var = tk.StringVar(
+            value="Load a part (.pdb.hkp), footprint (.hkp) or symbol file"
+        )
         status_bar = tk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN)
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
@@ -136,6 +178,472 @@ class XpeditionViewer:
             ],
         )
 
+    def load_part_file(self):
+        file_path = filedialog.askopenfilename(
+            title="Open Part Library",
+            filetypes=[
+                ("Xpedition part library", "*.pdb.hkp *.pdb"),
+                ("All files", "*.*"),
+            ],
+        )
+        if file_path:
+            self.load_part(file_path)
+
+    def load_part(self, file_path):
+        try:
+            content = self._read_text(file_path)
+            self._load_part_content(content, file_path)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load part: {e}")
+            self.status_var.set(f"Error: {str(e)}")
+
+    def _load_part_content(self, content, file_path):
+        parts = self._parse_part_library(content)
+        if not parts:
+            raise ValueError("No part definitions found")
+
+        self.part_library = parts
+        self.current_part_file = os.path.abspath(file_path)
+        self._select_part(0)
+
+    def _select_part(self, index):
+        if not (0 <= index < len(self.part_library)):
+            return
+
+        part = self.part_library[index]
+        self.current_part = part
+        directory = os.path.dirname(self.current_part_file)
+        self.current_part_symbol_path = self._find_symbol_file(part, directory)
+        self.current_part_cell_path = self._find_cell_file(part, directory)
+        self.part_symbol_button.config(
+            state=tk.NORMAL if self.current_part_symbol_path else tk.DISABLED
+        )
+        self.part_footprint_button.config(
+            state=tk.NORMAL if self.current_part_cell_path else tk.DISABLED
+        )
+        self._set_properties_text(self._format_part_properties(part, index))
+
+        if self.current_part_symbol_path:
+            self._load_part_symbol()
+        elif self.current_part_cell_path:
+            self._load_part_footprint()
+        else:
+            self.clear_view()
+
+        missing = []
+        if not self.current_part_symbol_path:
+            missing.append("symbol")
+        if not self.current_part_cell_path:
+            missing.append("cell")
+        suffix = f" (missing {', '.join(missing)})" if missing else ""
+        self.status_var.set(
+            f"Loaded part {part.get('number', '')}: {part.get('name', '')}{suffix}"
+        )
+
+    def show_part_symbol(self):
+        if not self.current_part_symbol_path:
+            messagebox.showwarning("Warning", "No matching symbol file found")
+            return
+        self._load_part_symbol()
+        self.status_var.set(
+            f"Part symbol: {os.path.basename(self.current_part_symbol_path)}"
+        )
+
+    def show_part_footprint(self):
+        if not self.current_part_cell_path:
+            messagebox.showwarning("Warning", "No matching cell file found")
+            return
+        self._load_part_footprint()
+        self.status_var.set(
+            f"Part footprint: {os.path.basename(self.current_part_cell_path)}"
+        )
+
+    def _load_part_symbol(self):
+        content = self._read_text(self.current_part_symbol_path)
+        self._clear_pad_library()
+        self.current_file_path = self.current_part_symbol_path
+        self._load_symbol_sources(self.current_part_symbol_path, content)
+
+    def _load_part_footprint(self):
+        self._clear_pad_library()
+        pad_path = self._find_pad_file(self.current_part_cell_path)
+        if pad_path:
+            self._load_pad_library(pad_path)
+        content = self._read_text(self.current_part_cell_path)
+        self.current_file_path = self.current_part_cell_path
+        self.parse_hkp_file(content)
+
+    @staticmethod
+    def _symbol_part_paths(file_path):
+        """Return sibling symbol files that belong to the same multi-part symbol."""
+        path = os.path.abspath(file_path)
+        directory, base = os.path.split(path)
+        stem, ext = os.path.splitext(base)
+        prefix = stem if re.fullmatch(r"\.\d+", ext) else base
+
+        candidates = []
+        for index in range(1, 100):
+            candidate = os.path.join(directory, f"{prefix}.{index}")
+            if os.path.isfile(candidate):
+                candidates.append(candidate)
+        if not candidates:
+            return [path]
+        if path not in candidates:
+            candidates.insert(0, path)
+        return candidates
+
+    @staticmethod
+    def _split_symbol_sections(lines):
+        """Split a symbol file into its K sections (one per symbol part)."""
+        k_indices = [
+            index for index, line in enumerate(lines) if line.strip().startswith("K ")
+        ]
+        if len(k_indices) == 1:
+            header = lines[k_indices[0]].strip().split(maxsplit=2)
+            name = header[2] if len(header) >= 3 else "Symbol"
+            return [(name, lines)]
+        if not k_indices:
+            return [("Symbol", lines)]
+
+        sections = []
+        geometry_tags = {"D", "P", "L", "A", "l", "c", "a"}
+        for position, start in enumerate(k_indices):
+            end = k_indices[position + 1] if position + 1 < len(k_indices) else len(lines)
+            section_lines = lines[start:end]
+            header = section_lines[0].strip().split(maxsplit=2)
+            name = header[2] if len(header) >= 3 else f"Part {position + 1}"
+            has_geometry = any(
+                line.strip() and line.strip().split(maxsplit=1)[0] in geometry_tags
+                for line in section_lines[1:]
+            )
+            if has_geometry:
+                sections.append((name, section_lines))
+
+        return sections or [("Symbol", lines)]
+
+    def _load_symbol_sources(self, file_path, content=None):
+        """Load a symbol and all of its sibling part files for selection."""
+        sources = []
+        paths = self._symbol_part_paths(file_path)
+        current_path = os.path.abspath(file_path)
+
+        for path in paths:
+            if content is not None and os.path.abspath(path) == current_path:
+                text = content
+            else:
+                text = self._read_text(path)
+            lines = text.strip().splitlines()
+            sections = self._split_symbol_sections(lines)
+            for name, section_lines in sections:
+                section_content = "\n".join(section_lines)
+                if not any(
+                    line.strip().startswith("V 50") for line in section_lines
+                ):
+                    section_content = "V 50\n" + section_content
+
+                if len(paths) > 1 or len(sections) > 1:
+                    label = f"Part {len(sources) + 1}: {name}"
+                    if len(paths) > 1:
+                        label += f" ({os.path.basename(path)})"
+                else:
+                    label = os.path.basename(path)
+                sources.append(
+                    {"label": label, "path": path, "content": section_content}
+                )
+
+        if not sources:
+            raise ValueError("No symbol definitions found")
+
+        self.symbol_sources = sources
+        self.current_symbol_index = 0
+        self._select_symbol(0)
+
+    def _select_symbol(self, index):
+        if not (0 <= index < len(self.symbol_sources)):
+            return
+        self.current_symbol_index = index
+        source = self.symbol_sources[index]
+        self.current_file_path = source["path"]
+        self.parse_hkp_file(source["content"])
+        self._update_symbol_selector()
+        self.status_var.set(
+            f"Symbol part {index + 1} of {len(self.symbol_sources)}: {source['label']}"
+        )
+
+    def _update_symbol_selector(self):
+        if not hasattr(self, "sub_selector"):
+            return
+        labels = [source["label"] for source in self.symbol_sources]
+        self.sub_selector.config(
+            values=labels, state="readonly" if len(labels) > 1 else "disabled"
+        )
+        self.sub_selector.set(
+            labels[self.current_symbol_index]
+            if 0 <= self.current_symbol_index < len(labels)
+            else ""
+        )
+
+    def _clear_symbol_selector(self):
+        self.symbol_sources = []
+        self.current_symbol_index = 0
+        if hasattr(self, "sub_selector"):
+            self.sub_selector.config(values=[], state="disabled")
+            self.sub_selector.set("")
+
+    def _on_symbol_selected(self, event=None):
+        if not hasattr(self, "sub_selector"):
+            return
+        index = self.sub_selector.current()
+        if index < 0:
+            return
+        self._select_symbol(index)
+
+    def _clear_part_state(self):
+        self.part_library = []
+        self.current_part = None
+        self.current_part_file = None
+        self.current_part_symbol_path = None
+        self.current_part_cell_path = None
+        if hasattr(self, "part_symbol_button"):
+            self.part_symbol_button.config(state=tk.DISABLED)
+            self.part_footprint_button.config(state=tk.DISABLED)
+        if hasattr(self, "properties_text"):
+            self._set_properties_text("")
+
+    def _set_properties_text(self, text):
+        self.properties_text.config(state=tk.NORMAL)
+        self.properties_text.delete("1.0", tk.END)
+        self.properties_text.insert("1.0", text)
+        self.properties_text.config(state=tk.DISABLED)
+
+    def _format_part_properties(self, part, index):
+        lines = [
+            f"Part {index + 1} of {len(self.part_library)}",
+            "=" * 32,
+        ]
+        rows = [
+            ("Part Number", part.get("number", "")),
+            ("Name", part.get("name", "")),
+            ("Label", part.get("label", "")),
+            ("Description", part.get("description", "")),
+            ("Reference Prefix", part.get("ref_prefix", "")),
+            ("Top Cell", part.get("top_cell", "")),
+            ("Bottom Cell", part.get("bottom_cell", "")),
+            ("Symbol", part.get("symbol_ref", "")),
+        ]
+        for label, value in rows:
+            if value:
+                lines.append(f"{label}: {value}")
+
+        if part.get("properties"):
+            lines.extend(["", "Properties", "=" * 32])
+            for name, value, value_type in part["properties"]:
+                suffix = f" [{value_type}]" if value_type and value_type != "Text" else ""
+                lines.append(f"{name}: {value}{suffix}")
+
+        if part.get("gates"):
+            lines.extend(["", "Gates", "=" * 32])
+            for gate in part["gates"]:
+                lines.append(f"{gate['name']}: {len(gate['pins'])} pins")
+                if gate["pins"]:
+                    lines.append("  " + ", ".join(gate["pins"]))
+
+        lines.extend(["", "Files", "=" * 32])
+        lines.append(f"Part: {self.current_part_file or ''}")
+        lines.append(
+            f"Symbol: {self.current_part_symbol_path or 'not found'}"
+        )
+        lines.append(f"Cell: {self.current_part_cell_path or 'not found'}")
+        return "\n".join(lines) + "\n"
+
+    def _find_symbol_file(self, part, directory):
+        symbol_ref = (part.get("symbol_ref") or "").strip()
+        if not symbol_ref:
+            return None
+
+        name = symbol_ref.split(":", 1)[-1].strip()
+        name = os.path.basename(name)
+        if not name:
+            return None
+
+        candidates = [name, name + ".hkp", name + ".sym"]
+        candidates.extend(f"{name}.{index}" for index in range(1, 10))
+        for candidate in candidates:
+            path = os.path.join(directory, candidate)
+            if os.path.isfile(path):
+                return path
+
+        pattern = os.path.join(directory, glob.escape(name) + "*")
+        for path in sorted(glob.glob(pattern)):
+            lower = path.lower()
+            if lower.endswith((".pdb.hkp", ".pdb")):
+                continue
+            if lower.endswith(
+                (".1", ".2", ".3", ".4", ".5", ".6", ".7", ".8", ".9", ".sym", ".hkp")
+            ):
+                return path
+        return None
+
+    def _find_cell_file(self, part, directory):
+        names = [
+            value
+            for value in (part.get("top_cell", ""), part.get("bottom_cell", ""))
+            if value
+        ]
+        candidates = []
+        for name in names:
+            candidates.extend(
+                [
+                    os.path.join(directory, name + ".hkp"),
+                    os.path.join(directory, name + "_Cell.hkp"),
+                    os.path.join(directory, name + "_cell.hkp"),
+                ]
+            )
+        for candidate in candidates:
+            if os.path.isfile(candidate) and self._cell_file_matches(candidate, names):
+                return candidate
+
+        preferred = [
+            os.path.join(directory, "_Cell.hkp"),
+            os.path.join(directory, "_cell.hkp"),
+            os.path.join(directory, "cell.hkp"),
+        ]
+        for candidate in preferred:
+            if os.path.isfile(candidate) and self._cell_file_matches(candidate, names):
+                return candidate
+
+        for candidate in glob.glob(os.path.join(directory, "*.hkp")):
+            base = os.path.basename(candidate).lower()
+            if base.endswith(".pdb.hkp") or "pad" in base:
+                continue
+            if self._cell_file_matches(candidate, names):
+                return candidate
+        return None
+
+    def _cell_file_matches(self, file_path, names):
+        if not names:
+            return True
+        try:
+            content = self._read_text(file_path)
+        except OSError:
+            return False
+        match = CELL_NAME_RE.search(content)
+        if not match:
+            return False
+        expected = {name.lower() for name in names}
+        return match.group(1).lower() in expected
+
+    @staticmethod
+    def _read_text(file_path):
+        with open(file_path, "rb") as source:
+            raw = source.read()
+        for encoding in ("utf-8-sig", "utf-8", "latin-1"):
+            try:
+                return raw.decode(encoding)
+            except UnicodeDecodeError:
+                continue
+        return raw.decode("latin-1")
+
+    @staticmethod
+    def _unquote(value):
+        return re.sub(r'\\(["\\])', r"\1", value)
+
+    @classmethod
+    def _quoted_values(cls, text):
+        return [cls._unquote(value) for value in QUOTED_RE.findall(text)]
+
+    @classmethod
+    def _parse_part_library(cls, content):
+        parts = []
+        current = None
+        gate = None
+        gates_by_name = {}
+
+        for raw in content.splitlines():
+            text = raw.strip()
+            if not text:
+                continue
+
+            if text.startswith(".Number"):
+                if current:
+                    parts.append(current)
+                values = cls._quoted_values(text)
+                current = {
+                    "number": values[0] if values else text[len(".Number") :].strip(),
+                    "name": "",
+                    "label": "",
+                    "description": "",
+                    "ref_prefix": "",
+                    "top_cell": "",
+                    "bottom_cell": "",
+                    "symbol_ref": "",
+                    "properties": [],
+                    "gates": [],
+                }
+                gate = None
+                gates_by_name = {}
+                continue
+
+            if current is None:
+                continue
+
+            if text.startswith("..Name "):
+                values = cls._quoted_values(text)
+                current["name"] = values[0] if values else ""
+            elif text.startswith("..Label "):
+                values = cls._quoted_values(text)
+                current["label"] = values[0] if values else ""
+            elif text.startswith("..Desc "):
+                values = cls._quoted_values(text)
+                current["description"] = values[0] if values else ""
+            elif text.startswith("..RefPrefix "):
+                values = cls._quoted_values(text)
+                current["ref_prefix"] = values[0] if values else ""
+            elif text.startswith("..TopCell "):
+                values = cls._quoted_values(text)
+                current["top_cell"] = values[0] if values else ""
+            elif text.startswith("..BottomCell "):
+                values = cls._quoted_values(text)
+                current["bottom_cell"] = values[0] if values else ""
+            elif text.startswith("..Symbol") and not text.startswith("...Symbol"):
+                values = cls._quoted_values(text)
+                current["symbol_ref"] = values[0] if values else ""
+            elif text.startswith("..Prop "):
+                values = cls._quoted_values(text)
+                if len(values) >= 3:
+                    current["properties"].append((values[0], values[1], values[2]))
+            elif text.startswith("..SwapGroup"):
+                values = cls._quoted_values(text)
+                gate = {"name": values[0] if values else "", "pins": [], "_numbers": []}
+                current["gates"].append(gate)
+                gates_by_name[gate["name"]] = gate
+            elif "Symbol_SwapGroup" in text or "Slot_SwapGroup" in text:
+                values = cls._quoted_values(text)
+                name = values[0] if values else ""
+                gate = gates_by_name.get(name)
+                if gate is None:
+                    gate = {"name": name, "pins": [], "_numbers": []}
+                    current["gates"].append(gate)
+                    gates_by_name[name] = gate
+            elif text.lstrip(".").startswith("PinName") and gate is not None:
+                values = cls._quoted_values(text)
+                if values:
+                    gate["pins"].append(values[0])
+            elif text.lstrip(".").startswith("PinNumber") and gate is not None:
+                values = cls._quoted_values(text)
+                if values:
+                    gate["_numbers"].append(values[0])
+
+        if current:
+            parts.append(current)
+        for part in parts:
+            for part_gate in part["gates"]:
+                if not part_gate["pins"]:
+                    part_gate["pins"] = part_gate.pop("_numbers", [])
+                else:
+                    part_gate.pop("_numbers", None)
+        return parts
+
     def load_hkp_file(self):
         self.load_footprint_file()
 
@@ -146,13 +654,26 @@ class XpeditionViewer:
 
     def load_file(self, file_path):
         try:
-            with open(file_path, "r", encoding="latin-1") as f:
-                content = f.read()
-
+            content = self._read_text(file_path)
             lines = content.strip().splitlines()
             file_type = self._detect_file_type(lines)
 
+            if file_type == "part":
+                self._load_part_content(content, file_path)
+                return
+
+            self._clear_part_state()
             self._clear_pad_library()
+
+            if file_type == "symbol":
+                self.current_file_path = os.path.abspath(file_path)
+                self._load_symbol_sources(file_path, content)
+                self.status_var.set(
+                    f"Loaded: {file_path} ({len(self.symbol_sources)} symbol parts)"
+                )
+                return
+
+            self._clear_symbol_selector()
             pad_path = None
             if file_type == "cell":
                 pad_path = self._find_pad_file(file_path)
@@ -174,12 +695,15 @@ class XpeditionViewer:
 
         file_type = self._detect_file_type(lines)
         if file_type == "cell":
+            self._clear_symbol_selector()
             self._parse_cell_file(lines)
         elif file_type == "padstack":
+            self._clear_symbol_selector()
             self._parse_padstack_file(lines)
         elif file_type == "symbol":
             self._parse_symbol_file(lines)
         else:
+            self._clear_symbol_selector()
             messagebox.showwarning("Warning", "Unknown file format")
 
         self.fit_view()
@@ -187,6 +711,8 @@ class XpeditionViewer:
     def _detect_file_type(self, lines):
         for line in lines[:20]:
             text = line.strip()
+            if "ASCII_PDB" in text or text.startswith(".Number "):
+                return "part"
             if text.startswith(".PACKAGE_CELL") or ".CELL_LIBRARY" in text:
                 return "cell"
             if "PADSTACK_LIBRARY" in text:
@@ -222,8 +748,7 @@ class XpeditionViewer:
         self.holes = {}
 
     def _load_pad_library(self, file_path):
-        with open(file_path, "r", encoding="latin-1") as f:
-            lines = f.read().strip().splitlines()
+        lines = self._read_text(file_path).strip().splitlines()
         self._parse_pad_library_lines(lines)
 
     def _parse_pad_library_lines(self, lines):
@@ -753,6 +1278,7 @@ class XpeditionViewer:
                 self._scale_y(y2),
                 outline=style.get("outline", "#000000"),
                 width=max(1, style.get("width", 1) * self.zoom_level),
+                dash=style.get("dash"),
                 tags=layer,
             )
         elif kind == "circle":

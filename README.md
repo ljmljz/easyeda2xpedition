@@ -20,7 +20,7 @@ EasyEDA2Xpedition is a Python tool that converts PCB designs and components from
 - **Coordinate Transformation**: Applies proper coordinate system transformations between formats
 - **Symbol Grid Alignment**: Snaps pins and outlines to the Symbol Editor's 0.1 inch grid and generates 0.2 inch pins
 - **Solder Mask and Paste Rules**: Expands solder mask by 4 mil per side, keeps paste at pad size, and skips paste on through-hole pads
-- **Built-in Viewer**: Previews converted footprints, padstacks and symbols with layer toggles
+- **Built-in Viewer**: Previews parts with properties plus their symbols and footprints, as well as footprints, padstacks and symbols with layer toggles
 
 ## Installation
 
@@ -138,6 +138,11 @@ python -m easyeda2xpedition.viewer.xpedition_viewer
 python -m easyeda2xpedition.viewer.easyeda_viewer
 ```
 
+The EasyEDA viewer loads a part by LCSC ID. The Xpedition viewer loads a
+`.pdb.hkp` part library. Both show the part properties and let you switch
+between the associated symbol and footprint previews. Multi-part symbols show
+one subpart at a time, with a subpart selector above the canvas.
+
 ## Project Structure
 
 ```
@@ -163,8 +168,8 @@ easyeda2xpedition/
 │   └── parts/
 │       └── part.py              # Part/PDB structure and serialization
 └── viewer/                       # Visualization utilities
-    ├── easyeda_viewer.py         # EasyEDA footprint/symbol viewer
-    └── xpedition_viewer.py       # Xpedition footprint/symbol viewer
+    ├── easyeda_viewer.py         # EasyEDA part/footprint/symbol viewer
+    └── xpedition_viewer.py       # Xpedition part/footprint/symbol viewer
 ```
 
 ## File Formats
