@@ -284,6 +284,11 @@ class EasyedaFootprintImporter:
                     **dict(zip(EeFootprintText.__fields__, ee_fields))
                 )
                 new_ee_footprint.texts.append(ee_text)
+            elif ee_designator in ("POLYLINE", "PL", "POLYGON", "PG", "PATH", "PT"):
+                ee_track = EeFootprintTrack(
+                    **dict(zip(EeFootprintTrack.__fields__, ee_fields))
+                )
+                new_ee_footprint.tracks.append(ee_track)
             elif ee_designator == "SVGNODE":
                 new_ee_footprint.model_3d = Easyeda3dModelImporter(
                     easyeda_cp_cad_data=[line], download_raw_3d_model=False

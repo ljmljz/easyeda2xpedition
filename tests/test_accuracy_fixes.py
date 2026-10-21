@@ -7,9 +7,15 @@ import pytest
 
 from easyeda2xpedition.convert_footprint import FootprintConverter, sample_svg_arc
 from easyeda2xpedition.convert_symbol import EeSymbolToXpeditionSymbol
+from easyeda2xpedition.easyeda.easyeda_importer import EasyedaFootprintImporter
 from easyeda2xpedition.easyeda.parameters_easyeda import EeSymbolPinPath
 from easyeda2xpedition.xpedition.footprint.pads import PolygonPad
-from easyeda2xpedition.xpedition.symbol.symbol import SymbolPart, SymbolShapeArc, SymbolShapeCircle
+from easyeda2xpedition.xpedition.symbol.symbol import (
+    SymbolPart,
+    SymbolShapeArc,
+    SymbolShapeCircle,
+    SymbolShapeLine,
+)
 
 
 def make_symbol_converter():
@@ -34,9 +40,9 @@ def make_symbol_converter():
     return converter
 
 
-def make_footprint_converter(pads=None):
+def make_footprint_converter(pads=None, texts=None, layers=None):
     footprint = SimpleNamespace(
-        info=SimpleNamespace(name="FP"),
+        info=SimpleNamespace(name="FP", layers=layers or []),
         bbox=SimpleNamespace(x=0, y=0, width=100, height=100),
         pads=pads or [],
         holes=[],
@@ -44,6 +50,7 @@ def make_footprint_converter(pads=None):
         circles=[],
         arcs=[],
         tracks=[],
+        texts=texts or [],
         solid_regions=[],
         copper_areas=[],
     )
@@ -138,6 +145,29 @@ class TestSymbolCoordinates:
         mock_file.assert_called_once_with("test_symbol", "w")
 
 
+class TestSymbolPolygonExport:
+    def test_polygon_is_exported_as_line_segments(self):
+        converter = make_symbol_converter()
+        bbox = SimpleNamespace(x=100, y=200, width=100, height=100)
+        subpart = SimpleNamespace(
+            rectangles=[],
+            circles=[],
+            ellipses=[],
+            polylines=[],
+            polygons=[SimpleNamespace(points="100 200 110 200 110 210")],
+            lines=[],
+            arcs=[],
+        )
+
+        converter._convert_shapes(subpart, bbox)
+
+        assert len(converter.xpedition_symbol.shapes) == 2
+        assert all(isinstance(shape, SymbolShapeLine) for shape in converter.xpedition_symbol.shapes)
+        first, second = converter.xpedition_symbol.shapes
+        assert (first.x1, first.y1, first.x2, first.y2) == (0, 0, 10, 0)
+        assert (second.x1, second.y1, second.x2, second.y2) == (10, 0, 10, -10)
+
+
 class TestFootprintShapes:
     def test_ellipse_points_are_centered(self):
         points = FootprintConverter._ellipse_points(10, 20, 4)
@@ -195,6 +225,104 @@ class TestFootprintShapes:
         points = sample_svg_arc(0, 0, 10, 10, 0, 0, 1, 20, 0, 8)
         assert points[0] == pytest.approx((0, 0))
         assert points[-1] == pytest.approx((20, 0), abs=1e-6)
+
+class TestFootprintTextConversion:
+    def test_text_is_written_to_cell(self):
+        text = SimpleNamespace(
+            text='A "quoted" label',
+            center_x=10,
+            center_y=20,
+            font_size=5,
+            stroke_width=1,
+            rotation=90,
+            layer_id=3,
+            is_displayed=True,
+            miror="",
+        )
+        layers = [SimpleNamespace(layer_id=3, layer_name="TopSilkLayer")]
+        converter = make_footprint_converter(texts=[text], layers=layers)
+
+        converter._convert_easyeda_shape_to_xpedition()
+
+        added = [item for item in converter._cell.texts if "...TEXT_TYPE USER_DEFINED" in item]
+        assert len(added) == 1
+        body = added[0]
+        assert '..TEXT "A \\"quoted\\" label"' in body
+        assert "....XY (100, -200)" in body
+        assert "....TEXT_LYR SILKSCREEN_MNT_SIDE" in body
+        assert "....HEIGHT 50" in body
+        assert "....STROKE_WIDTH 10" in body
+        assert "....ROTATION 90" in body
+
+    def test_hidden_text_is_skipped(self):
+        text = SimpleNamespace(
+            text="hidden",
+            center_x=0,
+            center_y=0,
+            font_size=5,
+            stroke_width=1,
+            rotation=0,
+            layer_id=3,
+            is_displayed=False,
+            miror="",
+        )
+        layers = [SimpleNamespace(layer_id=3, layer_name="TopSilkLayer")]
+        converter = make_footprint_converter(texts=[text], layers=layers)
+
+        converter._convert_easyeda_shape_to_xpedition()
+
+        assert [item for item in converter._cell.texts if "...TEXT_TYPE USER_DEFINED" in item] == []
+
+
+class TestFootprintPolylinePolygonPath:
+    @staticmethod
+    def _cad_data():
+        return {
+            "SMT": True,
+            "packageDetail": {
+                "title": "TEST",
+                "dataStr": {
+                    "BBox": {"x": 0, "y": 0, "width": 100, "height": 100},
+                    "head": {"x": 0, "y": 0, "c_para": {"package": "TEST"}},
+                    "layers": [
+                        "1~TopLayer~#ff0000~true~true~0~0",
+                        "3~TopSilkLayer~#ffffff~true~true~0~0",
+                    ],
+                    "shape": [
+                        "POLYLINE~1~3~~0 0 10 0~pl1~0",
+                        "POLYGON~1~3~~0 0 10 0 10 10~pg1~0",
+                        "PATH~1~3~~M 20 20 L 30 20~pt1~0",
+                    ],
+                },
+            },
+        }
+
+    def test_designators_are_imported_as_tracks(self):
+        footprint = EasyedaFootprintImporter(self._cad_data()).get_footprint()
+
+        assert len(footprint.tracks) == 3
+
+    def test_short_designators_are_imported_as_tracks(self):
+        cad_data = self._cad_data()
+        cad_data["packageDetail"]["dataStr"]["shape"] = [
+            "PL~1~3~~0 0 10 0~pl1~0",
+            "PG~1~3~~0 0 10 0 10 10~pg1~0",
+            "PT~1~3~~M 20 20 L 30 20~pt1~0",
+        ]
+
+        footprint = EasyedaFootprintImporter(cad_data).get_footprint()
+
+        assert len(footprint.tracks) == 3
+
+    def test_designators_are_converted_to_silkscreen_shapes(self):
+        converter = FootprintConverter(self._cad_data())
+
+        converter._convert_easyeda_shape_to_xpedition()
+
+        assert len(converter._cell.silkscreen_outlines) == 3
+        assert converter._cell.silkscreen_outlines[0].shape.points == [(0, 0), (100, 0)]
+        assert converter._cell.silkscreen_outlines[2].shape.points == [(200, -200), (300, -200)]
+
 
 class TestPadstackMaskAndPaste:
     @staticmethod

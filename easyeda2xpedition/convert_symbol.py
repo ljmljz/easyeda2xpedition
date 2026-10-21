@@ -397,6 +397,9 @@ class EeSymbolToXpeditionSymbol(object):
         for polyline in subpart.polylines:
             self._add_polyline(polyline, bbox, part_name)
 
+        for polygon in getattr(subpart, "polygons", []):
+            self._add_polyline(polygon, bbox, part_name)
+
         for line in subpart.lines:
             self._add_line(line, bbox, part_name)
 
